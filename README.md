@@ -1,2 +1,3 @@
 # deadstock-shop
-front-end / back-end
+front-end using React + vite
+back-end using Node.js + express.js
