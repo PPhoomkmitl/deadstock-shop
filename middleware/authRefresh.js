@@ -5,7 +5,7 @@ const verifyRefreshToken = async (req, res, next) => {
     try {
         const tokenRefresh = req.headers['authorization'];
 
-        if (!tokenRefresh || !tokenRefresh.startsWith('Bearer')) {
+        if (!tokenRefresh?.startsWith('Bearer')) {
             return res.status(403).send('A token is required for authentication');
         }
 

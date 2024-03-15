@@ -3,7 +3,7 @@ const jwt = require('jsonwebtoken');
 const verifyAccessToken = (req, res, next) => {
     const authHeader = req.headers['authorization'];
 
-    if (!authHeader || !authHeader.startsWith('Bearer') || authHeader === undefined || authHeader === 'Bearer null') {
+    if (!authHeader?.startsWith('Bearer') || authHeader === 'Bearer null') {
         return res.status(403).send('A token is required for authentication');
     }
 
