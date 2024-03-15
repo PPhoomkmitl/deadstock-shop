@@ -2,18 +2,22 @@ const bcrypt = require("bcrypt");
 const { generateAccessToken } = require('../config/genJwtAccessToken');
 const { generateRefreshToken } = require('../config/genJwtRefreshToken');
 const getConnection = require('../config/dbConnect');
+// const decrypt = require('decrypt');
 
 const { insertShippingAddress, insertBillingAddress } = require('../service/addressService');
+const { connect } = require("../routes/authRoute");
+
 
 /*------------------- User Side-------------------- */
 const userRegister = async (req, res) => {
   try {
-    const { firstname, lastname , email , password } = req.body;
-    const salt = await bcrypt.genSalt(10);
-    const hashedPassword = await bcrypt.hash(password, salt);
-  
+    const { firstname, lastname, email, password } = req.body;
+    
     const connection = await getConnection();
     await connection.beginTransaction();
+
+    const salt = await bcrypt.genSalt(10);
+    const hashedPassword = await bcrypt.hash(password, salt);
   
     try {
       // Check if the email is already in use
@@ -61,26 +65,34 @@ const userRegister = async (req, res) => {
 
 const userLogin = async (req, res) => {
   const connection = await getConnection();
+
+  // const Password = decrypt.decryptData(req.body.password);
+  // const Email = decrypt.decryptData(req.body.email);
+
+  const Password = req.body.password;
+  const Email = req.body.email;
+
   await connection.beginTransaction();
 
   try {
-    const { email , password } = req.body;
-
-    const [result] = await connection.query('SELECT users.email, user_accounts.password FROM user_accounts INNER JOIN users ON users.user_id = user_accounts.user_id WHERE email = ?', [email]);
+  
+    const [result] = await connection.query('SELECT users.email, user_accounts.password FROM user_accounts INNER JOIN users ON users.user_id = user_accounts.user_id WHERE email = ?', [Email]);
     
     if (result.length > 0) {
-      const passwordMatch = await bcrypt.compare(password, result[0].password);
+      const passwordMatch = await bcrypt.compare(Password, result[0].password);
+
+      console.log(passwordMatch);
 
       if (!passwordMatch) {
         return res.status(401).json({ message: "Username or password incorrect" });
       } else {
-        const access_token = generateAccessToken(email , 'member');
-        const refresh_token = generateRefreshToken(email , 'member');
+        const access_token = generateAccessToken(Email , 'member');
+        const refresh_token = generateRefreshToken(Email , 'member');
 
         return res.status(200).json(
           { 
-            access_token: access_token, 
-            refresh_token: refresh_token   
+            access_token, 
+            refresh_token   
           }
         );
       }
@@ -95,6 +107,22 @@ const userLogin = async (req, res) => {
     connection.destroy();
   }
 };
+
+const getCheckLogin = async (req, res) => {
+  const connection = await getConnection();
+
+  try {
+    const { email , role } = req.user
+    const [user] = await connection.query('SELECT first_name ,	last_name	, email	 FROM users WHERE email = ?', [email]);  
+    res.status(200).json({ email , role });
+
+  } catch (error) {
+    console.error('Error checking login:', error);
+    res.status(500).json({ error: 'An error occurred while checking login status.' });
+  } finally{
+    connection.destroy();  
+  }
+}
 
 
 // access token has expired 
@@ -136,24 +164,28 @@ const loginAdmin = async (req, res) => {
   const connection = await getConnection();
 
   try {
-    const { email, password } = req.body;
+    // const { email, password } = req.body;
+
+    // Decrypt email and password from req.body
+    const Email = req.body.email;
+    const Password = req.body.password;
 
     // Validate email and password
-    if (!email || !password) {
+    if (!Email || !Password) {
       return res.status(400).json({ error: "Email and password are required" });
     }
 
-    const [result] = await connection.query('SELECT users.email, user_accounts.password , user_accounts.user_type FROM user_accounts INNER JOIN users ON users.user_id = user_accounts.user_id WHERE email = ?', [email]);
+    const [result] = await connection.query('SELECT users.email, user_accounts.password , user_accounts.user_type FROM user_accounts INNER JOIN users ON users.user_id = user_accounts.user_id WHERE email = ?', [Email]);
     
     console.log(result);
     if (result.length > 0) {
-      const passwordMatch = await bcrypt.compare(password, result[0].password);
+      const passwordMatch = await bcrypt.compare(Password, result[0].password);
 
-      if (!passwordMatch) {
+      if (!passwordMatch) {vc 
         return res.status(401).json({ message: "Username or password incorrect" });
       } else {
-        const access_token = generateAccessToken(email , result[0].role);
-        const refresh_token = generateRefreshToken(email , result[0].role);
+        const access_token = generateAccessToken(Email , result[0].role);
+        const refresh_token = generateRefreshToken(Email , result[0].role);
 
         return res.status(200).json(
           { 
@@ -738,5 +770,6 @@ module.exports = {
   emptyCart,
   createOrder,
   getOrder,
-  updateOrderStatus
+  updateOrderStatus,
+  getCheckLogin
 };

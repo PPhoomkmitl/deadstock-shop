@@ -10,7 +10,8 @@ const {
     emptyCart,
     createOrder,
     getOrder,
-    updateOrderStatus
+    updateOrderStatus,
+    getCheckLogin
 } = require('../controller/userController')
 
 const authAccess = require('../middleware/authAccess')
@@ -19,7 +20,7 @@ const isAdmin = require('../middleware/isAdmin')
 const router = express.Router()
 
 // router.put("/update-user", updatedUser);
-router.post('/admin-login', loginAdmin);
+router.post('/admin-login', isAdmin ,loginAdmin);
 // router.post('/admin-protected', isAdmin);
 
 
@@ -31,7 +32,9 @@ router.post('/add-cart', authAccess, userCart);
 
 router.post('/register', userRegister);
 router.post('/login', userLogin);
+
 router.post('/refresh', authRefresh  , createRefreshToken);
+router.get('/check-login', authAccess  , getCheckLogin);
 
 
 router.put('/save-address', authAccess, saveAddress);
@@ -43,3 +46,4 @@ router.put('/order/update-order/:id' , authAccess ,updateOrderStatus);
 // router.post("/get-order-by-user/:id", authAccess, isAdmin, getAllOrders);
 
 module.exports = router
+

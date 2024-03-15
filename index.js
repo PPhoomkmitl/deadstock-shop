@@ -1,6 +1,8 @@
 const express = require('express');
 require('dotenv').config();
-const trimAndEscapeHtml = require('./middleware/trimAndEscape');
+const cors = require('cors');
+
+const sanitizeMiddleware = require('./middleware/sanitizeMiddleware');
 const { notFound, errorHandler } = require('./middleware/errorHandler');
 
 const authRouter = require("./routes/authRoute");
@@ -12,9 +14,11 @@ const PORT = process.env.PORT || 5000;
 const app = express();
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
+app.use(cors()); 
+
 
 /* ยังมีปัญหาอยู่ */
-// app.use(trimAndEscapeHtml);
+// app.use(sanitizeMiddleware);
 // app.use(notFound);
 // app.use(errorHandler);
 
