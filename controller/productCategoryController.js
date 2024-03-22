@@ -81,13 +81,16 @@ const deleteCategory = async (req, res) => {
 };
 
 const getCategory = async (req, res) => {
-  const { id } = req.params;
+  const { name } = req.params;
   const connection = await getConnection();
 
   try {
-    // ดึงข้อมูล category ตาม product_type_id
-    const selectQuery = 'SELECT * FROM product_type WHERE product_type_id = ?';
-    const [selectResult] = await connection.query(selectQuery, [id]);
+      // Sanitize input by escaping special characters
+      const safeName = name.replace(/</g, '&lt;').replace(/>/g, '&gt;');
+
+      // ดึงข้อมูล category ตาม product_type_id
+      const selectQuery = 'SELECT * FROM product_type WHERE type_name = ?';
+      const [selectResult] = await connection.query(selectQuery, [safeName]);
 
     if (selectResult.length === 0) {
       return res.status(404).json({ error: 'Category not found' });
@@ -95,6 +98,36 @@ const getCategory = async (req, res) => {
 
     const getCategory = selectResult[0];
     res.json(getCategory);
+  } catch (error) {
+    throw new Error(error);
+  } finally {
+    connection.destroy();
+  }
+};
+
+const getProductByCategory = async (req, res) => {
+  const { name } = req.params;
+  const connection = await getConnection();
+
+  try {
+      // Sanitize input by escaping special characters
+      const safeName = name.replace(/</g, '&lt;').replace(/>/g, '&gt;');
+
+      // ดึงข้อมูล category ตาม product_type_id
+      const selectQuery = `SELECT * 
+      FROM product 
+      INNER JOIN product_type 
+      ON product.product_type_id = product_type.product_type_id 
+      WHERE product_type.type_name = ?;
+      `;
+      const [selectResult] = await connection.query(selectQuery, [safeName]);
+
+    if (selectResult.length === 0) {
+      return res.status(404).json({ error: 'Category not found' });
+    }
+
+    const getCategory = selectResult[0];
+    res.json([getCategory]);
   } catch (error) {
     throw new Error(error);
   } finally {
@@ -122,5 +155,6 @@ module.exports = {
   updateCategory,
   deleteCategory,
   getCategory,
-  getallCategory
+  getallCategory,
+  getProductByCategory
 };

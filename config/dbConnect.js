@@ -1,10 +1,16 @@
 const mysql = require('mysql2/promise');
 require("dotenv").config();
 
-const host = process.env.HOST;
-const user = process.env.USER;
-const passWord = process.env.PASSWORD;
-const dataBase = process.env.DATABASE;
+const host = process.env.DB_HOST;
+const user = process.env.DB_USER;
+const passWord = process.env.DB_PASSWORD;
+const dataBase = process.env.DB_DATABASE;
+const port = process.env.DB_PORT;
+
+// const host = process.env.HOST;
+// const user = process.env.USER;
+// const passWord = process.env.PASSWORD;
+// const dataBase = process.env.DATABASE;
 
 // Handle the connection asynchronously
 const createConnection = async () => {
@@ -14,6 +20,7 @@ const createConnection = async () => {
       user: user,
       password: passWord,
       database: dataBase,
+      port: port,
     });
 
     console.log('Database is connected!');

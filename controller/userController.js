@@ -2,11 +2,73 @@ const bcrypt = require("bcrypt");
 const { generateAccessToken } = require('../config/genJwtAccessToken');
 const { generateRefreshToken } = require('../config/genJwtRefreshToken');
 const getConnection = require('../config/dbConnect');
+
+
 // const decrypt = require('decrypt');
-
 const { insertShippingAddress, insertBillingAddress } = require('../service/addressService');
-const { connect } = require("../routes/authRoute");
+require("../routes/authRoute");
 
+
+
+
+// var passport = require('passport')
+//   , OAuth2Strategy = require('passport-oauth').OAuth2Strategy;
+
+
+/*-----------------------googleAuth middleware-----------------------*/
+
+// passport.use('provider', new OAuth2Strategy(
+//   {
+//       // clientID: config.google.clientID,
+//       // clientSecret: config.google.clientSecret,
+//       // callbackURL: config.google.callbackURL
+//       authorizationURL: 'https://www.provider.com/oauth2/authorize',
+//       tokenURL: 'https://www.provider.com/oauth2/token',
+//       clientID: '1011918781744-9b3n88e2rlo9188qqhrbonlgd3n7jnub.apps.googleusercontent.com',
+//       clientSecret: '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',
+//       callbackURL: 'http://localhost:3000/'
+// },
+// async (accessToken, refreshToken, profile, done) => {
+//   try {
+//     const connection = await getConnection();
+//     const [rows] = await connection.query('SELECT * FROM users WHERE google_id = ?', [profile.id]);
+
+//     if (rows.length > 0) {
+//       // ผู้ใช้มีอยู่ในฐานข้อมูล
+//       return done(null, rows[0]);
+//     } else {
+//       // สร้างผู้ใช้ใหม่และบันทึกลงในฐานข้อมูล
+//       const newUser = {
+//         google_id: profile.id,
+//         name: profile.displayName,
+//         email: profile.emails[0].value
+//       };
+
+//       await connection.query('INSERT INTO users SET ?', newUser);
+
+//       return done(null, newUser);
+//     }
+//   } catch (error) {
+//     return done(error);
+//   }
+// }));
+
+
+
+
+
+// const googleAuth = passport.authenticate('provider', { scope: ['email', 'profile']})
+// const googleCallback = passport.authenticate('provider', { successRedirect: '/', failureRedirect: '/login' });
+
+
+const successRedirect = (req, res) => {
+  const user = req.user;
+  const access_token = generateAccessToken(user.email);
+  const refresh_token = generateRefreshToken(user.email);
+
+  res.status(200).json(token)
+  res.redirect(`http://app.example.com`);
+};
 
 /*------------------- User Side-------------------- */
 const userRegister = async (req, res) => {
@@ -16,9 +78,6 @@ const userRegister = async (req, res) => {
     const connection = await getConnection();
     await connection.beginTransaction();
 
-    const salt = await bcrypt.genSalt(10);
-    const hashedPassword = await bcrypt.hash(password, salt);
-  
     try {
       // Check if the email is already in use
       const [existingUser] = await connection.query('SELECT * FROM users WHERE email = ?', [email]);
@@ -27,6 +86,9 @@ const userRegister = async (req, res) => {
         await connection.rollback();
         return res.status(400).json({ message: "Email is already in use" });
       }
+
+      const salt = await bcrypt.genSalt(10);
+      const hashedPassword = await bcrypt.hash(password, salt);
 
       // If email is not in use, proceed with user registration
       const [result_user] = await connection.query('INSERT INTO users( email , first_name , last_name ) VALUES (?, ? , ?)', [email , firstname , lastname]);
@@ -76,7 +138,7 @@ const userLogin = async (req, res) => {
 
   try {
   
-    const [result] = await connection.query('SELECT users.email, user_accounts.password FROM user_accounts INNER JOIN users ON users.user_id = user_accounts.user_id WHERE email = ?', [Email]);
+    const [result] = await connection.query('SELECT users.user_id, user_accounts.password FROM user_accounts INNER JOIN users ON users.user_id = user_accounts.user_id WHERE email = ?', [Email]);
     
     if (result.length > 0) {
       const passwordMatch = await bcrypt.compare(Password, result[0].password);
@@ -86,8 +148,8 @@ const userLogin = async (req, res) => {
       if (!passwordMatch) {
         return res.status(401).json({ message: "Username or password incorrect" });
       } else {
-        const access_token = generateAccessToken(Email , 'member');
-        const refresh_token = generateRefreshToken(Email , 'member');
+        const access_token = generateAccessToken(result[0].user_id , 'member');
+        const refresh_token = generateRefreshToken(result[0].user_id , 'member');
 
         return res.status(200).json(
           { 
@@ -328,15 +390,10 @@ const saveAddress = async (req, res, next) => {
 };
 
 
-
-const userCart = async (req, res) => {
+const addUserCart = async (req, res) => {
   const connection = await getConnection();
   const { cart } = req.body;
   const { user_id } = req.body;
-
-
-
-  // const { user_id } = req.user;
 
   try {
     await connection.beginTransaction();
@@ -390,12 +447,12 @@ const userCart = async (req, res) => {
 
 const getUserCart = async (req, res) => {
   const connection = await getConnection();
-  const { user_id } = req.body;
-  // const { user_id } = req.user;
-
+  const { user_id } = req.user;
+ 
+  console.log(user_id);
   try {
     const [userCartData] = await connection.query(`
-      SELECT ci.quantity, p.*
+      SELECT ci.*, p.*
       FROM cart_item ci
       JOIN product p ON ci.product_id = p.product_id
       JOIN cart c ON ci.cart_id = c.cart_id
@@ -403,9 +460,14 @@ const getUserCart = async (req, res) => {
     `, [user_id]);
 
     const cart = {
-      product: userCartData.map(item => ({
-          product_id: item.product_id,
-          quantity: item.quantity,
+      products: userCartData.map(item => ({
+          id: item.cart_item_id,
+          name: item.product_name,
+          price: parseFloat(item.price) * parseInt(item.quantity),
+          size: 'M',
+          quantity: parseInt(item.quantity) ,
+          imageUrl:
+          "https://cdn.builder.io/api/v1/image/assets/TEMP/3af186bee0e96b7e4e1ca0863a03ae08876653c347feeb5ff29b80be383e39dc?apiKey=c3d84cbd0c3a42f4a1616e4ea278d805&",
       })),
     };
 
@@ -419,23 +481,33 @@ const getUserCart = async (req, res) => {
 
 const emptyCart = async (req, res) => {
   const connection = await getConnection();
-  const { user_id, product_id } = req.body; 
+  const { user_id } = req.user;
+  const { id } = req.params; 
+
+  const cart_item_id  = id;
+  console.log(user_id , cart_item_id );
 
   try {
     await connection.beginTransaction();
 
+    // ตรวจสอบว่ามีผู้ใช้หรือไม่
     const [userData] = await connection.query('SELECT * FROM users WHERE user_id = ?', [user_id]);
 
     if (userData.length > 0) {
+      // ตรวจสอบว่ามีตะกร้าสินค้าของผู้ใช้หรือไม่
       const [cartData] = await connection.query('SELECT * FROM cart WHERE user_id = ?', [user_id]);
 
-      if (cartData.length > 0) {
-        await connection.query('DELETE FROM cart_item WHERE cart_id = ? AND product_id = ?', [cartData[0].cart_id, product_id]);
+      console.log(cartData[0].cart_id);
 
-        // ตรวจสอบจำนวนสินค้าในตะกร้า
+      if (cartData.length > 0) {
+        // ลบรายการสินค้าออกจากตะกร้าโดยใช้ product_id
+        await connection.query('DELETE FROM cart_item WHERE cart_id = ? AND cart_item_id = ?', [cartData[0].cart_id, cart_item_id]);
+
+        // ตรวจสอบจำนวนสินค้าในตะกร้าหลังจากลบ
         const [cartItemCount] = await connection.query('SELECT COUNT(*) AS itemCount FROM cart_item WHERE cart_id = ?', [cartData[0].cart_id]);
         const itemCount = cartItemCount[0].itemCount;
 
+        // ถ้าไม่มีรายการสินค้าในตะกร้าอีกต่อไป ให้ลบข้อมูลตะกร้าทั้งหมดของผู้ใช้
         if (itemCount === 0) {
           await connection.query('DELETE FROM cart_item WHERE cart_id = ?', [cartData[0].cart_id]);
           await connection.query('DELETE FROM cart WHERE user_id = ?', [user_id]);
@@ -461,6 +533,7 @@ const emptyCart = async (req, res) => {
     connection.destroy();
   }
 };
+
 
 
 
@@ -607,6 +680,189 @@ const updateOrderStatus = async (req, res) => {
     }    
   } catch (error) {
     await connection.rollback(); // rollback transaction หากเกิดข้อผิดพลาด
+    console.error(error);
+    res.status(500).json({ error: 'Internal Server Error' });
+  } finally {
+    connection.destroy();
+  }
+};
+
+const getAllOrder = async (req, res) => {
+  const connection = await getConnection();
+
+  try { 
+    const [allUserOrders] = await connection.query('SELECT * FROM orders');
+    res.json(allUserOrders);
+  } catch (error) {
+    throw new Error(error);
+  } finally {
+    connection.destroy();
+  }
+};
+
+
+const getOrderByUserId = async (req, res) => {
+  const connection = await getConnection();
+  const { id } = req.params;
+  
+  try {
+    const [rows] = await connection.query('SELECT * FROM orders WHERE order_id = ?', [id]);
+    
+    if (rows.length > 0) {
+      const orderId = rows[0].order_id;
+      const [productRows] = await connection.query('SELECT * FROM products WHERE order_id = ?', [orderId]);
+      const [userRows] = await connection.query('SELECT * FROM users WHERE id = ?', [rows[0].user_id]);
+
+      const userOrderData = {
+        order: rows[0],
+        products: productRows,
+        orderId: userRows[0]
+      };
+
+      res.json(userOrderData);
+    } else {
+      res.json({ message: 'No orders found for the user' });
+    }
+  } catch (error) {
+    throw new Error(error);
+  } finally {
+    connection.destroy();
+  }
+};
+
+
+const createInvoice = async(req, res) => {
+  const connection = await getConnection();
+  const { user_id } = req.user;
+  try {
+      // Start transaction
+      await connection.beginTransaction();
+
+      // Insert invoice
+      const [invoiceResult] = await connection.query('INSERT INTO invoice (user_id, total_amount) VALUES (?, ?)', [user_id, totalAmount]);
+      const invoice_id = invoiceResult.insertId;
+
+      // Insert invoice details
+      for (const detail of invoiceDetails) {
+          await connection.query('INSERT INTO invoice_detail (invoice_id, product_id, quantity, price_per_unit, total_price) VALUES (?, ?, ?, ?, ?)',
+              [invoice_id, detail.productId, detail.quantity, detail.pricePerUnit, detail.totalPrice]);
+      }
+
+      // Commit transaction
+      await connection.commit();
+
+      res.status.json({message:'Invoice created successfully'});
+      console.log('Invoice created successfully');
+
+  } catch (error) {
+      // Rollback transaction in case of error
+      await connection.rollback();
+      throw error;
+  } finally {
+      // Close connection
+      connection.destroy();
+  }
+}
+
+
+const getInvoiceById = async (req , res) => {
+  const connection = await getConnection();
+  const { invoice_id } =req.params
+
+  try {
+      // Query the invoice and its details
+      const [invoiceResults] = await connection.query('SELECT * FROM invoice WHERE invoice_id = ?', [invoice_id]);
+      if (invoiceResults.length === 0) {
+          throw new Error('Invoice not found');
+      }
+
+      const [detailResults] = await connection.query('SELECT * FROM invoice_detail WHERE invoice_id = ?', [invoice_id]);
+
+      // Format the result
+      const invoice = {
+          invoice: invoiceResults[0],
+          details: detailResults
+      };
+
+      res.status.json(invoice);
+
+  } catch (error) {
+      throw error;
+  } finally {
+      // Close connection
+      connection.destroy();
+  }
+}
+
+// CREATE TABLE receipt (
+//   receipt_id INT PRIMARY KEY AUTO_INCREMENT,
+//   order_id INT,
+//   receipt_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+//   FOREIGN KEY (order_id) REFERENCES orders(order_id)
+// );
+
+// -- สร้างตารางสำหรับใบเสร็จ
+// CREATE TABLE receipt_details (
+//     detail_id INT PRIMARY KEY AUTO_INCREMENT,
+//     receipt_id INT,
+//     product_id INT,
+//     quantity INT NOT NULL,
+//     total_price DECIMAL(10, 2) NOT NULL,
+//     FOREIGN KEY (receipt_id) REFERENCES receipts(receipt_id),
+//     FOREIGN KEY (product_id) REFERENCES products(product_id)
+// ); 
+
+const createReceipt = async (req, res) => {
+  const connection = await getConnection();
+  const { order_id } = req.body;
+  const { user_id } = req.user;
+
+  if (!order_id || !user_id) {
+    return res.status(400).json({ error: 'data is missing or invalid' });
+  }
+
+  try {
+    const [userData] = await connection.query('SELECT * FROM users WHERE user_id = ?', [user_id]);
+
+    if (userData.length < 0) {
+      res.status(404).json({ error: 'User not found' });
+    }
+
+    const [userOrderData] = await connection.query(`SELECT orders.product_id , orders.quantity , product.price FROM order_detail
+    INNER JOIN product ON cart_item.product_id = product.product_id 
+    WHERE user_id = ?`, [user_id]);
+
+    const receiptInsertQuery = `
+     'INSERT INTO receipt (order_id, receipt_date) VALUES (?, ?)', [order_id, receipt_date]
+    `;
+    const [receiptInsertResult] = await connection.query(receiptInsertQuery, [user_id, 0]); 
+
+    const receiptId = receiptInsertResult.insertId;
+
+    let finalAmount = 0;
+
+    if (userOrderData.length > 0) {
+      for (const item of userOrderData) {
+        const { product_id, quantity, price } = item;
+        finalAmount += quantity * price;
+
+        const receiptDetailsInsertQuery = `
+          INSERT INTO receipt_details (receipt_id, receipt_id, quantity, subtotal_price)
+          VALUES (?, ?, ?, ?)
+        `;
+        await connection.query(receiptDetailsInsertQuery, [receiptId, product_id, quantity, quantity * price]);
+      }
+    }
+
+    const receiptUpdateQuery = `
+      UPDATE receipt
+      SET total_price = ?
+      WHERE receipt_id = ?
+    `;
+    await connection.query(receiptUpdateQuery, [finalAmount, orderId]);
+
+    res.json({ message: "success" });
+  } catch (error) {
     console.error(error);
     res.status(500).json({ error: 'Internal Server Error' });
   } finally {
@@ -765,11 +1021,18 @@ module.exports = {
   deleteUser,
   loginAdmin,
   saveAddress,
-  userCart,
+  addUserCart,
   getUserCart,
   emptyCart,
   createOrder,
   getOrder,
   updateOrderStatus,
-  getCheckLogin
+  getCheckLogin,
+  getAllOrder,
+  getOrderByUserId,
+  createInvoice ,
+  getInvoiceById,
+  // googleAuth,
+  // googleCallback,
+  // successRedirect
 };

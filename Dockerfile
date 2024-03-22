@@ -1,8 +1,11 @@
 # Use an official Node.js runtime as a base image
-FROM node:14-alpine
+FROM node:lts
+
+# Secure
+RUN groupadd -r app && useradd -r -g app app-user
 
 # Set the working directory in the container
-WORKDIR /
+WORKDIR /app
 
 # Copy package.json and package-lock.json to the working directory
 COPY package*.json ./
@@ -18,3 +21,5 @@ EXPOSE 5000
 
 # Define the command to run your application
 CMD [ "npm", "start" ]
+
+

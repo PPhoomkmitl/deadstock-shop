@@ -103,80 +103,36 @@ const getProduct = async (req, res) => {
     }
 };
   
-const getSearchProduct = async (req, res) => {
-  const connection = await getConnection();
-  try {
-    const { searchQuery } = req.body;
+// const getSearchProduct = async (req, res) => {
+//   const connection = await getConnection();
+//   try {
+//     const { searchQuery } = req.body;
 
-    if (!searchQuery || searchQuery.trim() === "") {
-      return res.status(404).json({ message: 'Product not found' });
-    }
+//     if (!searchQuery || searchQuery.trim() === "") {
+//       return res.status(404).json({ message: 'Product not found' });
+//     }
 
-    const safeSearchQuery = connection.escape(`%${searchQuery}%`);
+//     const safeSearchQuery = connection.escape(`%${searchQuery}%`);
 
-    const getSearchProductQuery = `SELECT * FROM product WHERE product_name LIKE ${safeSearchQuery}`;
-    const [product] = await connection.query(getSearchProductQuery);
+//     const getSearchProductQuery = `SELECT * FROM product WHERE product_name LIKE ${safeSearchQuery}`;
+//     const [product] = await connection.query(getSearchProductQuery);
 
-    if (!product || product.length === 0) {
-      return res.status(404).json({ message: 'Product not found' });
-    }
+//     if (!product || product.length === 0) {
+//       return res.status(404).json({ message: 'Product not found' });
+//     }
 
-    res.status(200).json(product);
-  } catch(error) {
-    console.error(error);
-    res.status(500).json({ message: 'Internal Server Error' });
-  } finally {
-    connection.destroy();
-  }
-}
+//     res.status(200).json(product);
+//   } catch(error) {
+//     console.error(error);
+//     res.status(500).json({ message: 'Internal Server Error' });
+//   } finally {
+//     connection.destroy();
+//   }
 
 
 const getAllProduct = async (req, res) => {
   const connection = await getConnection();
   try {
-
-    // // Filtering
-    // const { gte, gt, lte, lt, ...queryObj } = req.query;
-    // let whereClause = '';
-
-    // // Building the WHERE clause for filters
-    // Object.keys(queryObj).forEach((key) => {
-    //   if (whereClause !== '') {
-    //     whereClause += ' AND ';
-    //   }
-    //   whereClause += `${key} = ${connection.escape(queryObj[key])}`;
-    // });
-
-    // // Adding conditions for greater than or equal, greater than, less than or equal, less than
-    // Object.keys({ gte, gt, lte, lt }).forEach((key) => {
-    //   if (req.query[key]) {
-    //     if (whereClause !== '') {
-    //       whereClause += ' AND ';
-    //     }
-    //     whereClause += `${key} ${Op[key]} ${connection.escape(req.query[key])}`;
-    //   }
-    // });
-
-    // Sorting
-    // const sortBy = req.query.sort ? req.query.sort.split(",") : ["createdAt"];
-    // const order = sortBy.join(',');
-
-    // // Limiting the fields
-    // const fields = req.query.fields ? req.query.fields.split(",") : null;
-
-    // // Pagination
-    // const page = req.query.page || 1;
-    // const limit = req.query.limit || 10;
-    // const offset = (page - 1) * limit;
-
-    // // Construct the SQL query
-    // const sql = `
-    //   SELECT ${fields ? fields.join(',') : '*'}
-    //   FROM products
-    //   WHERE ${whereClause}
-    //   ORDER BY ${order}
-    //   LIMIT ${limit} OFFSET ${offset}
-    // `;
     const sql = `
       SELECT *
       FROM product
@@ -185,28 +141,48 @@ const getAllProduct = async (req, res) => {
     // Execute the query
     const [products] = await connection.query(sql);
 
-    // Get the total count for pagination
-    // const [totalCount] = await connection.query(`
-    //   SELECT COUNT(*) as total FROM products WHERE ${whereClause}
-    // `);
-    // const totalProducts = totalCount[0].total;
-    // const totalPages = Math.ceil(totalProducts / limit);
+
 
     res.json({
-      products,
-      // page: parseInt(page),
-      // totalPages,
-      // totalProducts,
+      products
     });
 
   } catch (error) {
     console.error(error);
     res.status(500).json({ message: 'Internal Server Error' });
   } finally {
-    await connection.destroy();
+    connection.destroy();
   }
 };
 
+const getSearchProduct = async (req, res) => {
+  const connection = await getConnection();
+  const searchQuery = req.query.keyword;
+
+  if (!searchQuery) {
+    return res.status(400).json({ error: 'Search query is required' });
+  }
+
+  try {
+    const [rows] = await connection.query(
+      `SELECT product.product_name 
+       FROM product 
+       INNER JOIN product_type ON product.product_type_id = product_type.product_type_id 
+       WHERE product.product_name LIKE CONCAT('%', ?, '%') 
+       OR product.description LIKE CONCAT('%', ?, '%') 
+       OR product_type.type_name LIKE CONCAT('%', ?, '%')
+       LIMIT 4`,
+      [searchQuery, searchQuery, searchQuery]
+    );
+
+    const productList = rows.map(row => row.product_name); 
+
+    res.json({ list: productList });
+  } catch (error) {
+    console.error('Error executing query:', error);
+    res.status(500).json({ error: 'An error occurred while searching data' });
+  }
+};
 
 
 module.exports = {
