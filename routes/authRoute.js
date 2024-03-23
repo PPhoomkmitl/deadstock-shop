@@ -1,4 +1,9 @@
 const express = require('express')
+const passport = require('passport');
+
+const { generateAccessToken } = require('../config/genJwtAccessToken');
+const { generateRefreshToken } = require('../config/genJwtRefreshToken');
+
 const {
     userRegister,
     userLogin,
@@ -15,9 +20,6 @@ const {
     getAllOrder,
     createInvoice ,
     getInvoiceById,
-    // googleAuth,
-    // googleCallback,
-    // successRedirect
 } = require('../controller/userController')
 
 const authAccess = require('../middleware/authAccess')
@@ -52,15 +54,24 @@ router.post('/create-invoice', createInvoice);
 
 
 /*----------------------- Google OAuth ----------------------*/
-// router.get('/google', googleAuth);
-// router.get('/google/callback', googleCallback, successRedirect);
+router.get('/u1', (req, res) => {
+    res.redirect('/user/google');
+});
 
-//   passport.authenticate('google', { failureRedirect: '/login' }),
-//   (req, res) => {
-//     const user = req.user;
-//     const token = generateToken(user);
-//     res.redirect(`http://app.example.com?token=${token}`);
-//   });
+router.get('/google', passport.authenticate('google', { scope: ['email', 'profile'] }));
+
+router.get('/google/callback', passport.authenticate('google', { failureRedirect: 'http://localhost:3000/login' }), async (req, res) => {
+    const profile = req.user; 
+    const access_token = generateAccessToken(profile.user_id, 'member');
+    const refresh_token = generateRefreshToken(profile.user_id, 'member'); 
+
+    res.setHeader('access_token', access_token);
+    res.setHeader('refresh_token', refresh_token);
+
+    return res.redirect('http://localhost:3000');
+});
+
+
 
 /*----------------------------------------------------------*/
 

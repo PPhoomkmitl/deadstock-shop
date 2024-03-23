@@ -1,8 +1,17 @@
 const getConnection = require('../config/dbConnect');
 
-const createProduct = async (req, res) => {
+const escapeHtml = (unsafe) => {
+  return unsafe
+       .replace(/&/g, "&amp;")
+       .replace(/</g, "&lt;")
+       .replace(/>/g, "&gt;")
+       .replace(/"/g, "&quot;")
+       .replace(/'/g, "&#039;");
+}
 
+const createProduct = async (req, res) => {
   const connection = await getConnection();
+
   try {
 
     const { product_name, description, price } = req.body;
@@ -16,7 +25,7 @@ const createProduct = async (req, res) => {
     console.error(error);
     res.status(500).json({ message: "Internal Server Error" });
   } finally {
-    await connection.destroy();
+    connection.destroy();
   }
 };
   
@@ -25,10 +34,7 @@ const updateProduct = async (req, res) => {
   const connection = await getConnection();
   
   try {
-    const productId = req.params.id;  
-    // if (req.body.product_name) {
-    //   req.body.slug = slugify(req.body.product_name);
-    // }
+    const productId = escapeHtml(req.params.id);  
 
     const { product_name, description, price } = req.body;
 
@@ -60,10 +66,10 @@ const updateProduct = async (req, res) => {
 
 const deleteProduct = async (req, res) => {
   const connection = await getConnection();
-  const productId = req.params.id; 
+  const productId = escapeHtml(req.params.id); 
   
   try {
-    // Assuming you have a 'products' table in your MySQL database
+ 
     const deleteProductQuery = 'DELETE FROM product WHERE product_id=?';
     const [deletedRows] = await connection.query(deleteProductQuery, [productId]);
 
@@ -83,10 +89,10 @@ const deleteProduct = async (req, res) => {
 
 const getProduct = async (req, res) => {
     const connection = await getConnection();
-    const productId = req.params.id; // Assuming the parameter is 'id'
+    const productId = escapeHtml(req.params.id); 
    
     try {
-      // Assuming you have a 'products' table in your MySQL database
+ 
       const getProductQuery = 'SELECT * FROM product WHERE product_id=?';
       const [product] = await connection.query(getProductQuery, [productId]);
   
@@ -157,7 +163,10 @@ const getAllProduct = async (req, res) => {
 
 const getSearchProduct = async (req, res) => {
   const connection = await getConnection();
-  const searchQuery = req.query.keyword;
+  const searchQuery = req.query.search;
+
+  // Sanitize input by escaping special characters
+  const safeName = searchQuery.replace(/</g, '&lt;').replace(/>/g, '&gt;');
 
   if (!searchQuery) {
     return res.status(400).json({ error: 'Search query is required' });
@@ -165,7 +174,7 @@ const getSearchProduct = async (req, res) => {
 
   try {
     const [rows] = await connection.query(
-      `SELECT product.product_name 
+      `SELECT * 
        FROM product 
        INNER JOIN product_type ON product.product_type_id = product_type.product_type_id 
        WHERE product.product_name LIKE CONCAT('%', ?, '%') 
@@ -175,14 +184,15 @@ const getSearchProduct = async (req, res) => {
       [searchQuery, searchQuery, searchQuery]
     );
 
-    const productList = rows.map(row => row.product_name); 
+    // const productList = rows.map(row => row.product_name); 
 
-    res.json({ list: productList });
+    res.json(rows);
   } catch (error) {
     console.error('Error executing query:', error);
     res.status(500).json({ error: 'An error occurred while searching data' });
   }
 };
+
 
 
 module.exports = {

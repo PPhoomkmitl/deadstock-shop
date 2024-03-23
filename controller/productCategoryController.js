@@ -1,5 +1,14 @@
 const getConnection = require('../config/dbConnect');
 
+const escapeHtml = (unsafe) => {
+  return unsafe
+       .replace(/&/g, "&amp;")
+       .replace(/</g, "&lt;")
+       .replace(/>/g, "&gt;")
+       .replace(/"/g, "&quot;")
+       .replace(/'/g, "&#039;");
+}
+
 const createCategory = async (req, res) => {
   const connection = await getConnection();
 
@@ -105,37 +114,43 @@ const getCategory = async (req, res) => {
   }
 };
 
+
 const getProductByCategory = async (req, res) => {
-  const { name } = req.params;
   const connection = await getConnection();
+  const searchQuery = escapeHtml(req.query.category);
+
+  if (!searchQuery) {
+    return res.status(400).json({ error: 'Search query is required' });
+  }
 
   try {
-      // Sanitize input by escaping special characters
-      const safeName = name.replace(/</g, '&lt;').replace(/>/g, '&gt;');
-
-      // ดึงข้อมูล category ตาม product_type_id
-      const selectQuery = `SELECT * 
+    // สร้าง parameterized query
+    const selectQuery = `
+      SELECT * 
       FROM product 
       INNER JOIN product_type 
       ON product.product_type_id = product_type.product_type_id 
-      WHERE product_type.type_name = ?;
-      `;
-      const [selectResult] = await connection.query(selectQuery, [safeName]);
+      WHERE product_type.type_name = ?
+    `;
+    
+    // ส่งคำสั่ง SQL และค่าพารามิเตอร์ไปที่ฐานข้อมูล
+    const [selectResult] = await connection.query(selectQuery, [escapeHtml(searchQuery)]);
 
     if (selectResult.length === 0) {
       return res.status(404).json({ error: 'Category not found' });
     }
 
-    const getCategory = selectResult[0];
-    res.json([getCategory]);
+    const getCategory = selectResult;
+    res.json(getCategory);
   } catch (error) {
-    throw new Error(error);
+    console.error('Error executing query:', error);
+    res.status(500).json({ error: 'An error occurred while fetching data' });
   } finally {
     connection.destroy();
   }
 };
 
-const getallCategory = async (req, res) => {
+const getAllCategory = async (req, res) => {
   const connection = await getConnection();
 
   try {
@@ -155,6 +170,6 @@ module.exports = {
   updateCategory,
   deleteCategory,
   getCategory,
-  getallCategory,
+  getAllCategory,
   getProductByCategory
 };

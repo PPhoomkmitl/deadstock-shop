@@ -8,68 +8,6 @@ const getConnection = require('../config/dbConnect');
 const { insertShippingAddress, insertBillingAddress } = require('../service/addressService');
 require("../routes/authRoute");
 
-
-
-
-// var passport = require('passport')
-//   , OAuth2Strategy = require('passport-oauth').OAuth2Strategy;
-
-
-/*-----------------------googleAuth middleware-----------------------*/
-
-// passport.use('provider', new OAuth2Strategy(
-//   {
-//       // clientID: config.google.clientID,
-//       // clientSecret: config.google.clientSecret,
-//       // callbackURL: config.google.callbackURL
-//       authorizationURL: 'https://www.provider.com/oauth2/authorize',
-//       tokenURL: 'https://www.provider.com/oauth2/token',
-//       clientID: '1011918781744-9b3n88e2rlo9188qqhrbonlgd3n7jnub.apps.googleusercontent.com',
-//       clientSecret: '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',
-//       callbackURL: 'http://localhost:3000/'
-// },
-// async (accessToken, refreshToken, profile, done) => {
-//   try {
-//     const connection = await getConnection();
-//     const [rows] = await connection.query('SELECT * FROM users WHERE google_id = ?', [profile.id]);
-
-//     if (rows.length > 0) {
-//       // ผู้ใช้มีอยู่ในฐานข้อมูล
-//       return done(null, rows[0]);
-//     } else {
-//       // สร้างผู้ใช้ใหม่และบันทึกลงในฐานข้อมูล
-//       const newUser = {
-//         google_id: profile.id,
-//         name: profile.displayName,
-//         email: profile.emails[0].value
-//       };
-
-//       await connection.query('INSERT INTO users SET ?', newUser);
-
-//       return done(null, newUser);
-//     }
-//   } catch (error) {
-//     return done(error);
-//   }
-// }));
-
-
-
-
-
-// const googleAuth = passport.authenticate('provider', { scope: ['email', 'profile']})
-// const googleCallback = passport.authenticate('provider', { successRedirect: '/', failureRedirect: '/login' });
-
-
-const successRedirect = (req, res) => {
-  const user = req.user;
-  const access_token = generateAccessToken(user.email);
-  const refresh_token = generateRefreshToken(user.email);
-
-  res.status(200).json(token)
-  res.redirect(`http://app.example.com`);
-};
-
 /*------------------- User Side-------------------- */
 const userRegister = async (req, res) => {
   try {
@@ -194,11 +132,11 @@ const createRefreshToken = async (req, res) => {
 
   try {
     console.log(req.user);
-    const [result] = await connection.query('SELECT email FROM users WHERE email = ?', [req.user.email]);
+    const [result] = await connection.query('SELECT user_id FROM users WHERE user_id = ?', [req.user.user_id]);
     if (result.length > 0) {
       const userData = result[0];
-      const access_token = generateAccessToken(userData.email);
-      const refresh_token = generateRefreshToken(userData.email);
+      const access_token = generateAccessToken(userData.user_id);
+      const refresh_token = generateRefreshToken(userData.user_id);
    
       return res.json({
         access_token,

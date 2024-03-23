@@ -13,7 +13,7 @@ const port = process.env.DB_PORT;
 // const dataBase = process.env.DATABASE;
 
 // Handle the connection asynchronously
-const createConnection = async () => {
+const getConnection = async () => {
   try {
     const connection = await mysql.createConnection({
       host: host,
@@ -32,4 +32,4 @@ const createConnection = async () => {
 };
 
 // Export a function that returns the connection
-module.exports = createConnection;
+module.exports = getConnection;
