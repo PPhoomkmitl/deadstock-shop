@@ -3,7 +3,6 @@ const { generateAccessToken } = require('../config/genJwtAccessToken');
 const { generateRefreshToken } = require('../config/genJwtRefreshToken');
 const getConnection = require('../config/dbConnect');
 
-
 // const decrypt = require('decrypt');
 const { insertShippingAddress, insertBillingAddress } = require('../service/addressService');
 require("../routes/authRoute");
@@ -66,9 +65,6 @@ const userRegister = async (req, res) => {
 const userLogin = async (req, res) => {
   const connection = await getConnection();
 
-  // const Password = decrypt.decryptData(req.body.password);
-  // const Email = decrypt.decryptData(req.body.email);
-
   const Password = req.body.password;
   const Email = req.body.email;
 
@@ -94,7 +90,7 @@ const userLogin = async (req, res) => {
             access_token, 
             refresh_token   
           }
-        );
+        )
       }
     } else {
       console.error('User not found in the database');
@@ -138,11 +134,13 @@ const createRefreshToken = async (req, res) => {
       const access_token = generateAccessToken(userData.user_id);
       const refresh_token = generateRefreshToken(userData.user_id);
    
-      return res.json({
-        access_token,
-        refresh_token,
-      });
-
+      return res.status(200).json(
+        { 
+          access_token, 
+          refresh_token   
+        }
+      )
+      
     } else {
       console.error('User not found in the database');
       return res.status(401).json({ error: 'User not found in the database' });
@@ -164,11 +162,11 @@ const loginAdmin = async (req, res) => {
   const connection = await getConnection();
 
   try {
-    // const { email, password } = req.body;
+    const { Email, Password } = req.body;
 
     // Decrypt email and password from req.body
-    const Email = req.body.email;
-    const Password = req.body.password;
+    // const Email = req.body.email;
+    // const Password = req.body.password;
 
     // Validate email and password
     if (!Email || !Password) {
@@ -187,12 +185,14 @@ const loginAdmin = async (req, res) => {
         const access_token = generateAccessToken(Email , result[0].role);
         const refresh_token = generateRefreshToken(Email , result[0].role);
 
+
         return res.status(200).json(
           { 
-            access_token: access_token, 
-            refresh_token: refresh_token   
+            access_token, 
+            refresh_token   
           }
-        );
+        )
+
       }
     } else {
       console.error('User not found in the database');
@@ -206,6 +206,19 @@ const loginAdmin = async (req, res) => {
   }
 };
 
+const logout = async(req, res) => {
+  try {
+      // Clear JWT token cookie
+      res.logout();
+
+      // Send response with success message
+      return res.json({ message: 'Successfully logged out' });
+  } catch (error) {
+      // Handle errors if any
+      console.error('Error during logout:', error);
+      return res.status(500).json({ message: 'An error occurred during logout' });
+  }
+}
 
 const deleteUser = async (req, res) => {
   const { id } = req.params;
@@ -330,8 +343,8 @@ const saveAddress = async (req, res, next) => {
 
 const addUserCart = async (req, res) => {
   const connection = await getConnection();
-  const { cart } = req.body;
-  const { user_id } = req.body;
+  const { product_id , quantity } = req.body;
+  const { user_id } = req.user;
 
   try {
     await connection.beginTransaction();
@@ -471,20 +484,6 @@ const emptyCart = async (req, res) => {
     connection.destroy();
   }
 };
-
-
-
-
-const logout = async (req, res) => {
-  try {
-    res.sendStatus(204).json({message:'Token deleted'}); 
-
-  } catch (error) {
-    console.error('Error during logout:', error);
-    res.status(500).json({ error: 'Internal Server Error' });
-  }
-}
-
 
 
 

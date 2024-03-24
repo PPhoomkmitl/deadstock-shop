@@ -54,21 +54,22 @@ router.post('/create-invoice', createInvoice);
 
 
 /*----------------------- Google OAuth ----------------------*/
-router.get('/u1', (req, res) => {
-    res.redirect('/user/google');
-});
-
 router.get('/google', passport.authenticate('google', { scope: ['email', 'profile'] }));
 
 router.get('/google/callback', passport.authenticate('google', { failureRedirect: 'http://localhost:3000/login' }), async (req, res) => {
     const profile = req.user; 
-    const access_token = generateAccessToken(profile.user_id, 'member');
-    const refresh_token = generateRefreshToken(profile.user_id, 'member'); 
+    const access_token = generateAccessToken(profile.user_id, req.user.role);
+    const refresh_token = generateRefreshToken(profile.user_id, req.user.role); 
 
-    res.setHeader('access_token', access_token);
-    res.setHeader('refresh_token', refresh_token);
+    console.log(access_token,refresh_token);
 
-    return res.redirect('http://localhost:3000');
+    if(req.user.role === 'admin'){
+        return res.redirect(`http://localhost:3000/dashboard`);
+    }
+    else {
+        return res.redirect(`http://localhost:3000?access_token=${access_token}&refresh_token=${refresh_token}`);
+    }
+    
 });
 
 

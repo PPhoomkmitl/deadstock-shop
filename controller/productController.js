@@ -14,10 +14,10 @@ const createProduct = async (req, res) => {
 
   try {
 
-    const { product_name, description, price } = req.body;
+    const { product_name, description, price , imgage_url , measurement } = req.body;
 
-    const createProductQuery = 'INSERT INTO product (product_name , description, price) VALUES (?, ?, ?)';
-    const [newProduct] = await connection.query(createProductQuery, [product_name, description, price]);
+    const createProductQuery = 'INSERT INTO product (product_name , description, price , imgage_url , measurement) VALUES (?, ?, ?, ?, ?)';
+    const [newProduct] = await connection.query(createProductQuery, [product_name, description, price, imgage_url , measurement]);
   
     res.json({ id: newProduct.insertId, product_name, description, price });
 
@@ -109,32 +109,6 @@ const getProduct = async (req, res) => {
     }
 };
   
-// const getSearchProduct = async (req, res) => {
-//   const connection = await getConnection();
-//   try {
-//     const { searchQuery } = req.body;
-
-//     if (!searchQuery || searchQuery.trim() === "") {
-//       return res.status(404).json({ message: 'Product not found' });
-//     }
-
-//     const safeSearchQuery = connection.escape(`%${searchQuery}%`);
-
-//     const getSearchProductQuery = `SELECT * FROM product WHERE product_name LIKE ${safeSearchQuery}`;
-//     const [product] = await connection.query(getSearchProductQuery);
-
-//     if (!product || product.length === 0) {
-//       return res.status(404).json({ message: 'Product not found' });
-//     }
-
-//     res.status(200).json(product);
-//   } catch(error) {
-//     console.error(error);
-//     res.status(500).json({ message: 'Internal Server Error' });
-//   } finally {
-//     connection.destroy();
-//   }
-
 
 const getAllProduct = async (req, res) => {
   const connection = await getConnection();
@@ -192,7 +166,6 @@ const getSearchProduct = async (req, res) => {
     res.status(500).json({ error: 'An error occurred while searching data' });
   }
 };
-
 
 
 module.exports = {

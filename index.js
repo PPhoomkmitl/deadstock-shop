@@ -4,9 +4,9 @@ require('dotenv').config();
 const cors = require('cors');
 const corsOptions = {
   origin: 'http://localhost:3000', 
-  optionsSuccessStatus: 200 
+  optionsSuccessStatus: 200,
+  credentials: true 
 };
-app.use(cors(corsOptions));
 
 const authRouter = require("./routes/authRoute");
 const productRouter = require("./routes/productRoute");
@@ -17,28 +17,25 @@ const PORT = process.env.PORT || 5000;
 const app = express();
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
+app.use(cors(corsOptions));
 
 const session = require('express-session');
 const passport = require('passport');
 require('./strategies/passport');
 
-
 app.use(session({
   secret: process.env.SESSION_SECRET,
-  resave: false,
-  saveUninitialized: false
+  resave: true,
+  saveUninitialized: true,
 }));
 
-
 app.use(passport.initialize());
-
 app.use(passport.session());
 
 // Route for user authentication
 app.use("/user", authRouter);
 app.use("/product", productRouter);
 app.use("/category", productCategoryRouter);
-
 
 
 // Start the server
