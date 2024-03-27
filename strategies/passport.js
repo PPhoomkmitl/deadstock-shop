@@ -14,8 +14,8 @@ async function(request, accessToken, refreshToken, profile, done) {
     try {
         const connection = await createConnection();
         console.log(profile.id);
-        const [rows] = await connection.query('SELECT * FROM users WHERE google_id = ? ', [profile.id]);
-     
+        const [rows] = await connection.query('SELECT * FROM users INNER JOIN user_accounts ON user_accounts.user_id = users.user_id WHERE google_id = ? ', [profile.id]);
+        
         console.log(rows.length);
 
         const [userExist] = await connection.query('SELECT * FROM users WHERE google_id IS NULL AND email = ?', [profile.emails[0].value]);
@@ -82,7 +82,7 @@ passport.deserializeUser(async function(id, done) {
         if(id == null){
             return done(new Error('User not found'));
         }
-        const [rows] = await connection.query('SELECT users.user_id , email , user_type as role FROM users INNER JOIN user_accounts ON user_accounts.user_id = users.user_id WHERE google_id = ?', [id]);
+        const [rows] = await connection.query('SELECT users.user_id , email , user_type FROM users INNER JOIN user_accounts ON user_accounts.user_id = users.user_id WHERE google_id = ?', [id]);
         if (rows.length === 0) {
             return done(new Error('User not found'));
         }

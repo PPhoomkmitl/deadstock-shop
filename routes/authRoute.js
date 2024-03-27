@@ -14,12 +14,13 @@ const {
     getUserCart,
     emptyCart,
     createOrder,
-    getOrder,
+    getOrderById,
     updateOrderStatus,
     getCheckLogin,
     getAllOrder,
     createInvoice ,
     getInvoiceById,
+    getHandleEventHook,
 } = require('../controller/userController')
 
 const authAccess = require('../middleware/authAccess')
@@ -44,7 +45,7 @@ router.get('/check-login', authAccess  , getCheckLogin);
 router.put('/save-address', authAccess, saveAddress);
 
 router.post('/create-order', authAccess, createOrder);
-router.get('/get-order', authAccess, getOrder);
+router.get('/get-order/:id', authAccess, getOrderById);
 router.put('/order/update-order/:id' , authAccess ,updateOrderStatus);
 router.get('/get-all-orders', getAllOrder);
 router.post('/get-order-by-user/:id', getAllOrder);
@@ -58,8 +59,8 @@ router.get('/google', passport.authenticate('google', { scope: ['email', 'profil
 
 router.get('/google/callback', passport.authenticate('google', { failureRedirect: 'http://localhost:3000/login' }), async (req, res) => {
     const profile = req.user; 
-    const access_token = generateAccessToken(profile.user_id, req.user.role);
-    const refresh_token = generateRefreshToken(profile.user_id, req.user.role); 
+    const access_token = generateAccessToken(profile.user_id, profile.user_type);
+    const refresh_token = generateRefreshToken(profile.user_id, profile.user_type); 
 
     console.log(access_token,refresh_token);
 
@@ -72,9 +73,13 @@ router.get('/google/callback', passport.authenticate('google', { failureRedirect
     
 });
 
+/*----------------------------------------------------------*/
+
+/*----------------------- Webhook Simulator Service ----------------------*/
+
+router.post('/webhook', getHandleEventHook);
 
 
 /*----------------------------------------------------------*/
-
 module.exports = router
 

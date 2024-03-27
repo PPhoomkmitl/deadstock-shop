@@ -12,7 +12,7 @@ const authRefresh = require('../middleware/authRefresh')
 const isAdmin = require('../middleware/isAdmin')
 const router = express.Router();
 
-router.get('/get/:id', getProduct);
+router.get('/get-id/:id', getProduct);
 router.get('/get-all', getAllProduct);
 
 // router.get('/get-search', getSearchProduct);

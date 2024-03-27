@@ -12,6 +12,7 @@ const authRouter = require("./routes/authRoute");
 const productRouter = require("./routes/productRoute");
 const productCategoryRouter = require("./routes/productCategoryRoute");
 
+
 const PORT = process.env.PORT || 5000;
 
 const app = express();

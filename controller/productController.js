@@ -90,6 +90,8 @@ const deleteProduct = async (req, res) => {
 const getProduct = async (req, res) => {
     const connection = await getConnection();
     const productId = escapeHtml(req.params.id); 
+
+    // console.log(productId);
    
     try {
  
@@ -113,22 +115,18 @@ const getProduct = async (req, res) => {
 const getAllProduct = async (req, res) => {
   const connection = await getConnection();
   try {
-    const sql = `
-      SELECT *
-      FROM product
-    `;
-
+    console.log('123');
+    const getProductQuery = 'SELECT * FROM product';
     // Execute the query
-    const [products] = await connection.query(sql);
+    const [products] = await connection.query(getProductQuery);
 
 
-
-    res.json({
+    res.status(200).json({
       products
     });
 
   } catch (error) {
-    console.error(error);
+    // console.error(error);
     res.status(500).json({ message: 'Internal Server Error' });
   } finally {
     connection.destroy();
