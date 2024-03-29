@@ -20,7 +20,9 @@ const {
     getAllOrder,
     createInvoice ,
     getInvoiceById,
-    getHandleEventHook,
+    getOrderByUserId,
+    getAddress
+    // getHandleEventHook,
 } = require('../controller/userController')
 
 const authAccess = require('../middleware/authAccess')
@@ -43,12 +45,13 @@ router.post('/refresh', authRefresh  , createRefreshToken);
 router.get('/check-login', authAccess  , getCheckLogin);
 
 router.put('/save-address', authAccess, saveAddress);
+router.get('/get-address', authAccess, getAddress);
 
 router.post('/create-order', authAccess, createOrder);
 router.get('/get-order/:id', authAccess, getOrderById);
 router.put('/order/update-order/:id' , authAccess ,updateOrderStatus);
 router.get('/get-all-orders', getAllOrder);
-router.post('/get-order-by-user/:id', getAllOrder);
+router.get('/get-order-by-user',  authAccess, getOrderByUserId);
 
 router.get('/get-invoice/:id', getInvoiceById);
 router.post('/create-invoice', createInvoice);
@@ -73,13 +76,5 @@ router.get('/google/callback', passport.authenticate('google', { failureRedirect
     
 });
 
-/*----------------------------------------------------------*/
-
-/*----------------------- Webhook Simulator Service ----------------------*/
-
-router.post('/webhook', getHandleEventHook);
-
-
-/*----------------------------------------------------------*/
 module.exports = router
 

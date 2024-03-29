@@ -3,10 +3,11 @@ const { generateAccessToken } = require('../config/genJwtAccessToken');
 const { generateRefreshToken } = require('../config/genJwtRefreshToken');
 const getConnection = require('../config/dbConnect');
 const { v4: uuidv4 } = require('uuid');
+require('dotenv').config();
 
 
 const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY)
-endpoint_secret = 'whsec_c3132e9310d21ee7a14ef87ec961c365cb15fb372397e6581886d85a1621d956';
+const endpointSecret = 'whsec_c3132e9310d21ee7a14ef87ec961c365cb15fb372397e6581886d85a1621d956'
 
 // const decrypt = require('decrypt');
 const { insertShippingAddress, insertBillingAddress } = require('../service/addressService');
@@ -16,7 +17,6 @@ require("../routes/authRoute");
 const userRegister = async (req, res) => {
   try {
     const { firstname, lastname, email, password } = req.body;
-    
     const connection = await getConnection();
     await connection.beginTransaction();
 
@@ -137,9 +137,10 @@ const createRefreshToken = async (req, res) => {
 
   try {
     console.log(req.user);
-    const [result] = await connection.query('SELECT user_id FROM users WHERE user_id = ?', [req.user.user_id]);
+    const [result] = await connection.query('SELECT users.user_id , user_accounts.user_type AS role FROM users INNER JOIN user_accounts ON user_accounts.user_id = users.user_id WHERE users.user_id = ?', [req.user.user_id]);
     if (result.length > 0) {
       const userData = result[0];
+      console.log('Refresh', userData)
       const access_token = generateAccessToken(userData.user_id , userData.role);
       const refresh_token = generateRefreshToken(userData.user_id , userData.role);
    
@@ -346,6 +347,25 @@ const saveAddress = async (req, res, next) => {
 };
 
 
+const getAddress = async (req, res) => {
+  const connection = await getConnection();
+  const { user_id } = req.user;
+  try {
+    const [rows] = await connection.query('SELECT * FROM user_address WHERE user_id = ?', [user_id]);
+    if (rows.length > 0) {
+      res.status(200).json({
+        message: 'Successful get user address',
+        address: rows
+      });
+    } else {
+      res.status(404).json({ message: 'User address not found' });
+    }
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ message: 'Internal server error' });
+  }
+};
+
 const addUserCart = async (req, res) => {
   const connection = await getConnection();
   const { cart } = req.body;
@@ -448,20 +468,16 @@ const emptyCart = async (req, res) => {
     const [userData] = await connection.query('SELECT * FROM users WHERE user_id = ?', [user_id]);
 
     if (userData.length > 0) {
-      // ตรวจสอบว่ามีตะกร้าสินค้าของผู้ใช้หรือไม่
       const [cartData] = await connection.query('SELECT * FROM cart WHERE user_id = ?', [user_id]);
 
       console.log(cartData[0].cart_id);
 
       if (cartData.length > 0) {
-        // ลบรายการสินค้าออกจากตะกร้าโดยใช้ product_id
         await connection.query('DELETE FROM cart_item WHERE cart_id = ? AND cart_item_id = ?', [cartData[0].cart_id, cart_item_id]);
 
-        // ตรวจสอบจำนวนสินค้าในตะกร้าหลังจากลบ
         const [cartItemCount] = await connection.query('SELECT COUNT(*) AS itemCount FROM cart_item WHERE cart_id = ?', [cartData[0].cart_id]);
         const itemCount = cartItemCount[0].itemCount;
 
-        // ถ้าไม่มีรายการสินค้าในตะกร้าอีกต่อไป ให้ลบข้อมูลตะกร้าทั้งหมดของผู้ใช้
         if (itemCount === 0) {
           await connection.query('DELETE FROM cart_item WHERE cart_id = ?', [cartData[0].cart_id]);
           await connection.query('DELETE FROM cart WHERE user_id = ?', [user_id]);
@@ -489,9 +505,7 @@ const emptyCart = async (req, res) => {
 };
 
 
-
 /* ----------------------- Order --------------------- */
-/* ยังไม่เสร็จ */
 const createOrder = async (req, res) => {
   const connection = await getConnection();
   const { shippingAddressData, billingAddressData } = req.body;
@@ -505,7 +519,6 @@ const createOrder = async (req, res) => {
     return res.status(400).json({ error: 'Billing address data is missing or invalid' });
   }
 
-  let session;
   const orderId = uuidv4();
   let finalAmount = 0;
 
@@ -519,7 +532,6 @@ const createOrder = async (req, res) => {
       return;
     }
 
-
     // Find Cart By User
     const [userCartData] = await connection.query(`SELECT cart_item.product_id , cart_item.quantity , product.price , product.product_name FROM cart 
     INNER JOIN cart_item ON cart.cart_id = cart_item.cart_id 
@@ -530,29 +542,29 @@ const createOrder = async (req, res) => {
 
       let lineItems = [];
       for (const item of userCartData) {
-        const { product_id, quantity } = item;
+        finalAmount += item.quantity * item.price;   
         lineItems.push({
           price_data: {
             currency: "usd",
             product_data: {
+              image: item.image_url,
               name: item.product_name,
             },
-            unit_amount: item.price * quantity * 100,
+            unit_amount: item.price * item.quantity * 100,
           },
-          quantity: quantity,
+          quantity: item.quantity,
         });
       }
-
 
       const session = await stripe.checkout.sessions.create({
       payment_method_types: ["card"],
         line_items: lineItems,
         mode: "payment",
-        success_url: `http://localhost:3000/${orderId}`,
-        cancel_url: `http://localhost:3000/${orderId}`,
+        success_url: `http://localhost:3000/billing?id=${orderId}`,
+        cancel_url: `http://localhost:3000/fail/${orderId}`,
       });
 
-      console.log(session)
+      // console.log(session)
 
       const orderData = {
         session_id: session.id,
@@ -563,7 +575,13 @@ const createOrder = async (req, res) => {
         user_id: user_id
       };
 
-      await connection.query("INSERT INTO orders SET ?", orderData);
+      const query = `
+      INSERT INTO orders (user_id , total_price, shipping_status, fullfill_status, order_id, session_id)
+      VALUES (? , ?, 'Pending' ,? , ?, ?)
+      `;
+      const values = [orderData.user_id , orderData.total_price, orderData.fullfill_status,orderData.order_id, orderData.session_id];
+
+      await connection.query(query, values);
 
       
       for (const item of userCartData) {
@@ -571,23 +589,26 @@ const createOrder = async (req, res) => {
         finalAmount += quantity * price;
 
         const orderDetailsInsertQuery = `
-          INSERT INTO order_details (order_id, product_id, quantity, subtotal_price)
+          INSERT INTO order_details (product_id, quantity, subtotal_price, order_id)
           VALUES (?, ?, ?, ?)
         `;
-        await connection.query(orderDetailsInsertQuery, [orderId, product_id, quantity, quantity * price]);
+        await connection.query(orderDetailsInsertQuery, [product_id, quantity, (quantity * price) , orderData.order_id]);
       }
       
-      await connection.query("UPDATE orders SET total_price = finalAmount WHERE order_id = ?", orderData);
-      
+      await connection.query("UPDATE orders SET total_price = ? WHERE order_id = ?", [finalAmount, orderData.order_id]);
 
+      console.log(shippingAddressData);
+      const order_id = orderData.order_id;
       // Insert shipping address
-      await insertShippingAddress(user_id, shippingAddressData);
+      await insertShippingAddress(user_id, order_id, shippingAddressData);
+ 
+      await insertBillingAddress(user_id, order_id, billingAddressData);
 
-      // Insert billing address
-      await insertBillingAddress(user_id, billingAddressData);
 
-      
+      console.log('123')
+
       await connection.commit();
+
       res.json({
         message: "Checkout success.",
         id: session.id,
@@ -596,35 +617,40 @@ const createOrder = async (req, res) => {
 
     }
     else {
-      return;
+      res.status(400).json({
+        message: "Checkout Not Success.",
+      });
     }
- 
-
   } catch (error) {
     await connection.rollback();
-    console.error("Error creating order:", error.message);
+    console.error("Error creating order:", error);
     res.status(400).json({ error: "Error payment" });
   } finally {
     connection.destroy();
   }
 };
 
+
 const getOrderById = async (req, res) => {
   const connection = await getConnection();
   const orderId = req.params.id;
-  const { user_id } = req.user;
+
+  console.log(orderId);
 
   try {
-    const [rows] = await connection.query('SELECT * FROM orders WHERE user_id = ?', [user_id]);
+    const [rows] = await connection.query('SELECT * FROM orders WHERE order_id = ?', [orderId]);
 
     if (rows.length > 0) {
       const [productRow] = await connection.query(`
-      SELECT * FROM order_details
+      SELECT product.product_name , product.size , product.image_url , order_details.quantity , subtotal_price , users.first_name , users.last_name , users.email , orders.* FROM order_details
       INNER JOIN product ON product.product_id = order_details.product_id
       INNER JOIN orders ON orders.order_id = order_details.order_id
+      INNER JOIN users ON users.user_id = orders.user_id
       WHERE orders.order_id = ?
     `, [orderId]);
 
+    // INNER JOIN shipping_address ON shipping_address.user_id = orders.order_id
+    // INNER JOIN billing_address ON billing_address.user_id = orders.order_id
   
       const userOrder = {
         detail: productRow
@@ -674,6 +700,7 @@ const updateOrderStatus = async (req, res) => {
 const getAllOrder = async (req, res) => {
   const connection = await getConnection();
 
+
   try { 
     const [allUserOrders] = await connection.query('SELECT * FROM orders');
     res.json(allUserOrders);
@@ -687,20 +714,15 @@ const getAllOrder = async (req, res) => {
 
 const getOrderByUserId = async (req, res) => {
   const connection = await getConnection();
-  const { id } = req.params;
+  const { user_id } = req.user;
   
   try {
-    const [rows] = await connection.query('SELECT * FROM orders WHERE order_id = ?', [id]);
+    const [rows] = await connection.query('SELECT * FROM orders WHERE user_id = ?', [user_id]);
     
     if (rows.length > 0) {
-      const orderId = rows[0].order_id;
-      const [productRows] = await connection.query('SELECT * FROM products WHERE order_id = ?', [orderId]);
-      const [userRows] = await connection.query('SELECT * FROM users WHERE id = ?', [rows[0].user_id]);
 
       const userOrderData = {
-        order: rows[0],
-        products: productRows,
-        orderId: userRows[0]
+        orders:rows
       };
 
       res.json(userOrderData);
@@ -854,50 +876,6 @@ const createReceipt = async (req, res) => {
   }
 };
 
-const getHandleEventHook =  async (req, res) => {
-  const sig = req.headers["stripe-signature"];
-  const endpointSecret = 'whsec_c3132e9310d21ee7a14ef87ec961c365cb15fb372397e6581886d85a1621d956'
-
-  let event;
-
-  try {
-    event = stripe.webhooks.constructEvent(req.body, sig, endpointSecret);
-  } catch (err) {
-    res.status(400).send(`Webhook Error: ${err.message}`);
-    return;
-  }
-
-  // Handle the event
-  switch (event.type) {
-    case "checkout.session.completed":
-      const paymentSuccessData = event.data.object;
-      const sessionId = paymentSuccessData.id;
-
-      const data = {
-        status: paymentSuccessData.status,
-      };
-
-      const result = await conn.query("UPDATE orders SET ? WHERE session_id = ?", [
-        data,
-        sessionId,
-      ]);
-
-      console.log("=== update result", result);
-
-      // event.data.object.id = session.id
-      // event.data.object.customer_details คือข้อมูลลูกค้า
-      break;
-    default:
-      console.log(`Unhandled event type ${event.type}`);
-  }
-
-  // Return a 200 response to acknowledge receipt of the event
-  res.send();
-}
-
-  
-
-
 module.exports = {
   userRegister,
   userLogin,
@@ -917,8 +895,6 @@ module.exports = {
   getOrderByUserId,
   createInvoice ,
   getInvoiceById,
-  getHandleEventHook
-  // googleAuth,
-  // googleCallback,
-  // successRedirect
+  getAddress 
+  // getHandleEventHook
 };
