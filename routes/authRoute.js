@@ -68,7 +68,7 @@ router.get('/google/callback', passport.authenticate('google', { failureRedirect
     console.log('access 1 -->',access_token);
     console.log('refresh 2 -->',refresh_token)
 
-    if(req.user.role === 'admin'){
+    if(req.user.role === 'user_admin' || req.user.role === 'super_admin' || req.user.role === 'admin'){
         return res.redirect(`http://localhost:3000/dashboard`);
     }
     else {
