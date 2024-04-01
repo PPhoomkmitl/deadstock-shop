@@ -573,23 +573,20 @@ const createOrder = async (req, res) => {
         const { product_id, quantity, price } = item;
         finalAmount += quantity * price;
 
-        const orderDetailsInsertQuery = `
-          INSERT INTO order_details (product_id, quantity, subtotal_price, order_id)
-          VALUES (?, ?, ?, ?)
-        `;
+        const orderDetailsInsertQuery = `INSERT INTO order_details (product_id, quantity, subtotal_price, order_id) VALUES (?, ?, ?, ?)`;
         await connection.query(orderDetailsInsertQuery, [product_id, quantity, (quantity * price) , orderData.order_id]);
+        await connection.query(`UPDATE product SET reserved_quantity = reserved_quantity - 1 WHERE product_id = ?`, [product_id]);
       }
       
       await connection.query("UPDATE orders SET total_price = ? WHERE order_id = ?", [finalAmount, orderData.order_id]);
-
       const order_id = orderData.order_id;
 
       // Insert shipping address
       const shippingAddressId = await insertShippingAddress(user_id, order_id, shippingAddressData);
- 
       const billingAddressId = await insertBillingAddress(user_id, order_id, billingAddressData);
 
       await connection.query("UPDATE orders SET shipping_address_id = ? , billing_address_id = ? WHERE order_id = ?", [shippingAddressId, billingAddressId, order_id]);
+      await connection.query(`DELETE cart_item.* FROM cart INNER JOIN cart_item ON cart.cart_id = cart_item.cart_id WHERE cart.user_id = ?`, [user_id]);
       await connection.commit();
 
       res.json({
@@ -616,8 +613,6 @@ const createOrder = async (req, res) => {
 const getOrderById = async (req, res) => {
   const connection = await getConnection();
   const orderId = req.params.id;
-
-  console.log(orderId);
 
   try {
     const [rows] = await connection.query('SELECT * FROM orders WHERE order_id = ?', [orderId]);
