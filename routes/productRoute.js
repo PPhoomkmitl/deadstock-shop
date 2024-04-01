@@ -5,7 +5,8 @@ const {
   getAllProduct,
   updateProduct,
   deleteProduct,
-  getSearchProduct
+  getSearchProduct,
+  updateStockProduct
 } = require("../controller/productController");
 const authAccess = require('../middleware/authAccess')
 const authRefresh = require('../middleware/authRefresh')
@@ -16,12 +17,10 @@ router.get('/get-id/:id', getProduct);
 router.get('/get-all', getAllProduct);
 
 // router.get('/get-search', getSearchProduct);
-
-router.post('/create', createProduct);
-router.put('/update/:id', updateProduct);
-router.delete('/delete/:id', deleteProduct);
-
-
+router.post('/create', authAccess ,createProduct);
+router.put('/update/:id', authAccess ,updateProduct);
+router.put('/update-stock/:id', authAccess , updateStockProduct);
+router.delete('/delete/:id',authAccess, deleteProduct);
 router.get('/search',getSearchProduct);
 
 

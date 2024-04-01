@@ -212,20 +212,6 @@ const loginAdmin = async (req, res) => {
   }
 };
 
-const logout = async(req, res) => {
-  try {
-      // Clear JWT token cookie
-      res.logout();
-
-      // Send response with success message
-      return res.json({ message: 'Successfully logged out' });
-  } catch (error) {
-      // Handle errors if any
-      console.error('Error during logout:', error);
-      return res.status(500).json({ message: 'An error occurred during logout' });
-  }
-}
-
 const deleteUser = async (req, res) => {
   const { id } = req.params;
   const connection = await getConnection();
@@ -296,9 +282,9 @@ const updatedUser = async (req, res) => {
   }
 };
 
-const saveAddress = async (req, res, next) => {
+const saveAddress = async (req, res) => {
   const connection = await getConnection();
-  const { user_id } = req.body;
+  const { user_id } = req.user;
 
   try {
     await connection.beginTransaction();
@@ -311,16 +297,18 @@ const saveAddress = async (req, res, next) => {
       [user_id]
     );
 
-    console.log(result.length);
     if (result.length > 0 ) {
-      const [updatedUser] = await connection.query(
+      await connection.query(
         'UPDATE user_address SET address_line1 = ?, address_line2 = ?, city = ?, postal_code = ?, country = ? WHERE user_id = ?',
         [address_line1, address_line2, city, postal_code, country, user_id]
       );
+   
       await connection.commit(); 
-      res.json(updatedUser[0]);
+      res.status(200).json({message:'Update Success'});
+      
     } else {
-      console.log('hello'); 
+ 
+
       const [insertResult] = await connection.query(
         'INSERT INTO user_address (user_id, address_line1, address_line2, city, postal_code, country) VALUES (?, ?, ?, ?, ?, ?)',
         [user_id, address_line1, address_line2, city, postal_code, country]
@@ -333,7 +321,7 @@ const saveAddress = async (req, res, next) => {
         );
 
         await connection.commit(); 
-        res.json(newUser[0]);
+        res.status(200).json({message:'Update Success'});
       } else {
         res.status(500).json({ error: 'Failed to save address.' });
       }
@@ -520,7 +508,7 @@ const createOrder = async (req, res) => {
   }
 
   const orderId = uuidv4();
-  let finalAmount = 0;
+  let finalAmount = 0.0;
 
   try {
     await connection.beginTransaction();
@@ -542,13 +530,13 @@ const createOrder = async (req, res) => {
 
       let lineItems = [];
       for (const item of userCartData) {
-        finalAmount += item.quantity * item.price;   
+        console.log(finalAmount)
         lineItems.push({
           price_data: {
             currency: "usd",
-            product_data: {
-              image: item.image_url,
+            product_data: {          
               name: item.product_name,
+              image: item.image_url
             },
             unit_amount: item.price * item.quantity * 100,
           },
@@ -564,8 +552,6 @@ const createOrder = async (req, res) => {
         cancel_url: `http://localhost:3000/fail/${orderId}`,
       });
 
-      // console.log(session)
-
       const orderData = {
         session_id: session.id,
         shipping_status: 'Pending',
@@ -579,11 +565,10 @@ const createOrder = async (req, res) => {
       INSERT INTO orders (user_id , total_price, shipping_status, fullfill_status, order_id, session_id)
       VALUES (? , ?, 'Pending' ,? , ?, ?)
       `;
-      const values = [orderData.user_id , orderData.total_price, orderData.fullfill_status,orderData.order_id, orderData.session_id];
 
+      const values = [orderData.user_id , orderData.total_price, orderData.fullfill_status,orderData.order_id, orderData.session_id];
       await connection.query(query, values);
 
-      
       for (const item of userCartData) {
         const { product_id, quantity, price } = item;
         finalAmount += quantity * price;
@@ -597,16 +582,14 @@ const createOrder = async (req, res) => {
       
       await connection.query("UPDATE orders SET total_price = ? WHERE order_id = ?", [finalAmount, orderData.order_id]);
 
-      console.log(shippingAddressData);
       const order_id = orderData.order_id;
+
       // Insert shipping address
-      await insertShippingAddress(user_id, order_id, shippingAddressData);
+      const shippingAddressId = await insertShippingAddress(user_id, order_id, shippingAddressData);
  
-      await insertBillingAddress(user_id, order_id, billingAddressData);
+      const billingAddressId = await insertBillingAddress(user_id, order_id, billingAddressData);
 
-
-      console.log('123')
-
+      await connection.query("UPDATE orders SET shipping_address_id = ? , billing_address_id = ? WHERE order_id = ?", [shippingAddressId, billingAddressId, order_id]);
       await connection.commit();
 
       res.json({
@@ -614,7 +597,6 @@ const createOrder = async (req, res) => {
         id: session.id,
         orderData: orderData,
       });
-
     }
     else {
       res.status(400).json({
@@ -649,11 +631,22 @@ const getOrderById = async (req, res) => {
       WHERE orders.order_id = ?
     `, [orderId]);
 
-    // INNER JOIN shipping_address ON shipping_address.user_id = orders.order_id
-    // INNER JOIN billing_address ON billing_address.user_id = orders.order_id
-  
+    const [shippingRow] = await connection.query(`
+    SELECT shipping_address.* FROM orders
+    INNER JOIN shipping_address ON shipping_address.address_id = orders.shipping_address_id
+    WHERE orders.order_id = ?
+    `, [orderId]);
+
+    const [billingRow] = await connection.query(`
+    SELECT billing_address.* FROM orders
+    INNER JOIN billing_address ON billing_address.address_id = orders.billing_address_id
+    WHERE orders.order_id = ?
+   `, [orderId]);
+
       const userOrder = {
-        detail: productRow
+        detail: productRow,
+        shipping:shippingRow,
+        billing:billingRow
       };
 
       res.json(userOrder);

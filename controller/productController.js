@@ -165,6 +165,28 @@ const getSearchProduct = async (req, res) => {
   }
 };
 
+const updateStockProduct = async (req, res) => {
+  const connection = await getConnection();
+  const productId = escapeHtml(req.params.id); 
+  
+  try {
+ 
+    const updateProductQuery = 'UPDATE product SET reserved_quantity = reserved_quantity + 1 WHERE product_id = ?';
+    const [updatedRows] = await connection.query(updateProductQuery, [productId]);
+
+    if (updatedRows.affectedRows > 0) {
+      res.json({ message: 'Product update stock successfully' });
+    } else {
+      res.status(404).json({ message: 'Product not found' });
+    }
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ message: 'Internal Server Error' });
+  } finally {
+    connection.destroy();
+  }
+};
+
 
 module.exports = {
   createProduct,
@@ -172,5 +194,6 @@ module.exports = {
   getAllProduct,
   updateProduct,
   deleteProduct,
-  getSearchProduct
+  getSearchProduct,
+  updateStockProduct 
 };

@@ -24,12 +24,12 @@ const insertShippingAddress = async (userId ,orderId, shippingAddressData) => {
       const shippingAddressId = result.insertId;
 
 
-      console.log(orderId);
-
+      // console.log("Shipping",shippingAddressId , orderId);
       // await connection.query("UPDATE orders SET shipping_address_id = ? WHERE order_id = ?", [shippingAddressId, orderId]);
  
 
-      return { success: true};
+      return shippingAddressId;
+
     } catch (error) {
       console.error('Error inserting shipping address:', error);
       return { success: false, error: 'Internal Server Error' };
@@ -67,10 +67,11 @@ const insertShippingAddress = async (userId ,orderId, shippingAddressData) => {
       //     SET order_id = ?
       //     WHERE address_id = ?
       // `;
+      // console.log("Billing",billingAddressId , orderId);
       // await connection.query("UPDATE orders SET billing_address_id = ? WHERE order_id = ?", [billingAddressId, orderId]);
 
 
-      return { success: true};
+      return billingAddressId;
     } catch (error) {
       console.error('Error inserting billing address:', error);
       return { success: false, error: 'Internal Server Error' };
