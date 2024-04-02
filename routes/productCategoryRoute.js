@@ -12,7 +12,9 @@ const isAdmin = require('../middleware/isAdmin')
 const sanitizeMiddleware = require('../middleware/sanitizeMiddleware')
 const router = express.Router();
 
-router.post('/create-category',sanitizeMiddleware, authAccess, isAdmin ,createCategory);
+// router.post('/create-category',sanitizeMiddleware, authAccess, isAdmin ,createCategory);
+router.post('/create-category',createCategory); // เอามาแค่แก้ไข
+
 router.put('/update-category/:id', authAccess, isAdmin, updateCategory);
 router.delete('/delete-category/:id',authAccess, isAdmin,  deleteCategory);
 
