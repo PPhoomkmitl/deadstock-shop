@@ -14,11 +14,11 @@ async function(request, accessToken, refreshToken, profile, done) {
     try {
         const connection = await createConnection();
         console.log(profile.id);
-        const [rows] = await connection.query('SELECT * FROM users WHERE google_id = ? ', [profile.id]);
-     
+        const [rows] = await connection.query('SELECT * FROM users INNER JOIN user_accounts ON user_accounts.user_id = users.user_id WHERE google_id = ? ', [profile.id]);
+        
         console.log(rows.length);
-    
-        const [userExist] = await connection.query('SELECT * FROM users WHERE google_id IS NULL AND email = ?', [profile.emails[0].value]);
+
+        // const [userExist] = await connection.query('SELECT * FROM users WHERE google_id IS NULL AND email = ?', [profile.emails[0].value]);
 
         console.log(userExist)
 
@@ -27,41 +27,50 @@ async function(request, accessToken, refreshToken, profile, done) {
             console.log('User successfully:',rows.length);
             return done(null, rows[0]);
 
-        } else if(userExist === 0) {
-            // สร้างผู้ใช้ใหม่และบันทึกลงในฐานข้อมูล
-            let role = 'member';
-            if (/^[^\s@]+@kmitl\.ac\.th$/.test(newUser.email)) {
-                role = 'admin';
-            }
+        } else if(rows.length === 0) {
+            const [userExist] = await connection.query('SELECT * FROM users WHERE google_id IS NULL AND email = ?', [profile.emails[0].value]);
+            if(userExist.length === 0) {
+                
+                // สร้างผู้ใช้ใหม่และบันทึกลงในฐานข้อมูล
+                let role = 'member';
+                if (/^[^\s@]+@kmitl\.ac\.th$/.test(profile.emails[0].value)) {
+                    role = 'admin';
+                } 
+             
+                const newUser = {
+                    google_id: profile.id,
+                    email: profile.emails[0].value,
+                    firstname: profile.name.givenName,
+                    lastname: profile.name.familyName,
+                    role: role
+                };
 
-            const newUser = {
-                google_id: profile.id,
-                email: profile.emails[0].value,
-                firstname: profile.name.givenName,
-                lastname: profile.name.familyName,
-                role: role
-            };
+                console.log(newUser);
+                const [userData] = await connection.query('INSERT INTO users (first_name, last_name, email, registration_date, google_id) VALUES (?, ?, ?, NOW(), ?)', [newUser.firstname, newUser.lastname, newUser.email, newUser.google_id]);
 
-            console.log(newUser);
-            const [userData] = await connection.query('INSERT INTO users (first_name, last_name, email, registration_date, google_id) VALUES (?, ?, ?, NOW(), ?)', [newUser.firstname, newUser.lastname, newUser.email, newUser.google_id]);
-
-            // ตรวจสอบว่ามีข้อมูลผู้ใช้ที่ถูกสร้างขึ้นหรือไม่
-            if (userData.length === 0) {
-                console.error('Error inserting user:', error);
-                return done(error);
-            }
+                // ตรวจสอบว่ามีข้อมูลผู้ใช้ที่ถูกสร้างขึ้นหรือไม่
+                if (userData.length === 0) {
+                    console.error('Error inserting user:', error);
+                    return done(error);
+                }
+                
+                const userId = userData.insertId;              
+                const [userAccountData] = await connection.query('INSERT INTO user_accounts (user_id ,password, user_type) VALUES (?, ?, ?)', [userId ,'google_auth',  role]);
+        
+                console.log('userData',newUser);
+                if (userAccountData.length === 0) {
+                    console.error('Error inserting user:', error);
+                    return done(error);
+                }
             
-            const userId = userData.insertId;              
-            const [userAccountData] = await connection.query('INSERT INTO user_accounts (user_id ,password, user_type) VALUES (?, ?, ?)', [userId ,'google_auth',  role]);
-       
-            console.log('userData',newUser);
-            if (userAccountData.length === 0) {
-                console.error('Error inserting user:', error);
-                return done(error);
+                console.log('User inserted successfully:');
+                return done(null, newUser);
             }
-         
-            console.log('User inserted successfully:');
-            return done(null, newUser);
+            else {
+                // ผู้ใช้มีอยู่ในฐานข้อมูล             
+                console.log('User successfully:',rows.length);
+                return done(null, rows[0]);
+            }
 
         }
         else {
@@ -84,7 +93,7 @@ passport.deserializeUser(async function(id, done) {
         if(id == null){
             return done(new Error('User not found'));
         }
-        const [rows] = await connection.query('SELECT users.user_id , email , user_type as role FROM users INNER JOIN user_accounts ON user_accounts.user_id = users.user_id WHERE google_id = ?', [id]);
+        const [rows] = await connection.query('SELECT users.user_id , email , user_type FROM users INNER JOIN user_accounts ON user_accounts.user_id = users.user_id WHERE google_id = ?', [id]);
         if (rows.length === 0) {
             return done(new Error('User not found'));
         }

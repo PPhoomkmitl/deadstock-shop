@@ -2,6 +2,12 @@ const bcrypt = require("bcrypt");
 const { generateAccessToken } = require('../config/genJwtAccessToken');
 const { generateRefreshToken } = require('../config/genJwtRefreshToken');
 const getConnection = require('../config/dbConnect');
+const { v4: uuidv4 } = require('uuid');
+require('dotenv').config();
+
+
+const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY)
+const endpointSecret = 'whsec_c3132e9310d21ee7a14ef87ec961c365cb15fb372397e6581886d85a1621d956'
 
 // const decrypt = require('decrypt');
 const { insertShippingAddress, insertBillingAddress } = require('../service/addressService');
@@ -11,7 +17,6 @@ require("../routes/authRoute");
 const userRegister = async (req, res) => {
   try {
     const { firstname, lastname, email, password } = req.body;
-    
     const connection = await getConnection();
     await connection.beginTransaction();
 
@@ -108,10 +113,14 @@ const getCheckLogin = async (req, res) => {
   const connection = await getConnection();
 
   try {
-    const { email , role } = req.user
-    const [user] = await connection.query('SELECT first_name ,	last_name	, email	 FROM users WHERE email = ?', [email]);  
-    res.status(200).json({ email , role });
-
+    const { user_id , role } = req.user
+    const [user] = await connection.query('SELECT first_name ,	last_name	, email	 FROM users WHERE user_id = ?', [user_id]);  
+    if(user.length > 0) {
+      return res.status(200).json({ user_id , role });
+    }
+    else {
+      return res.status(401).json({ error: 'Username not found' });
+    }
   } catch (error) {
     console.error('Error checking login:', error);
     res.status(500).json({ error: 'An error occurred while checking login status.' });
@@ -128,11 +137,12 @@ const createRefreshToken = async (req, res) => {
 
   try {
     console.log(req.user);
-    const [result] = await connection.query('SELECT user_id FROM users WHERE user_id = ?', [req.user.user_id]);
+    const [result] = await connection.query('SELECT users.user_id , user_accounts.user_type AS role FROM users INNER JOIN user_accounts ON user_accounts.user_id = users.user_id WHERE users.user_id = ?', [req.user.user_id]);
     if (result.length > 0) {
       const userData = result[0];
-      const access_token = generateAccessToken(userData.user_id);
-      const refresh_token = generateRefreshToken(userData.user_id);
+      console.log('Refresh', userData)
+      const access_token = generateAccessToken(userData.user_id , userData.role);
+      const refresh_token = generateRefreshToken(userData.user_id , userData.role);
    
       return res.status(200).json(
         { 
@@ -163,10 +173,6 @@ const loginAdmin = async (req, res) => {
 
   try {
     const { Email, Password } = req.body;
-
-    // Decrypt email and password from req.body
-    // const Email = req.body.email;
-    // const Password = req.body.password;
 
     // Validate email and password
     if (!Email || !Password) {
@@ -205,20 +211,6 @@ const loginAdmin = async (req, res) => {
     connection.destroy();
   }
 };
-
-const logout = async(req, res) => {
-  try {
-      // Clear JWT token cookie
-      res.logout();
-
-      // Send response with success message
-      return res.json({ message: 'Successfully logged out' });
-  } catch (error) {
-      // Handle errors if any
-      console.error('Error during logout:', error);
-      return res.status(500).json({ message: 'An error occurred during logout' });
-  }
-}
 
 const deleteUser = async (req, res) => {
   const { id } = req.params;
@@ -290,9 +282,9 @@ const updatedUser = async (req, res) => {
   }
 };
 
-const saveAddress = async (req, res, next) => {
+const saveAddress = async (req, res) => {
   const connection = await getConnection();
-  const { user_id } = req.body;
+  const { user_id } = req.user;
 
   try {
     await connection.beginTransaction();
@@ -305,16 +297,18 @@ const saveAddress = async (req, res, next) => {
       [user_id]
     );
 
-    console.log(result.length);
     if (result.length > 0 ) {
-      const [updatedUser] = await connection.query(
+      await connection.query(
         'UPDATE user_address SET address_line1 = ?, address_line2 = ?, city = ?, postal_code = ?, country = ? WHERE user_id = ?',
         [address_line1, address_line2, city, postal_code, country, user_id]
       );
+   
       await connection.commit(); 
-      res.json(updatedUser[0]);
+      res.status(200).json({message:'Update Success'});
+      
     } else {
-      console.log('hello'); 
+ 
+
       const [insertResult] = await connection.query(
         'INSERT INTO user_address (user_id, address_line1, address_line2, city, postal_code, country) VALUES (?, ?, ?, ?, ?, ?)',
         [user_id, address_line1, address_line2, city, postal_code, country]
@@ -327,7 +321,7 @@ const saveAddress = async (req, res, next) => {
         );
 
         await connection.commit(); 
-        res.json(newUser[0]);
+        res.status(200).json({message:'Update Success'});
       } else {
         res.status(500).json({ error: 'Failed to save address.' });
       }
@@ -341,9 +335,28 @@ const saveAddress = async (req, res, next) => {
 };
 
 
+const getAddress = async (req, res) => {
+  const connection = await getConnection();
+  const { user_id } = req.user;
+  try {
+    const [rows] = await connection.query('SELECT * FROM user_address WHERE user_id = ?', [user_id]);
+    if (rows.length > 0) {
+      res.status(200).json({
+        message: 'Successful get user address',
+        address: rows
+      });
+    } else {
+      res.status(404).json({ message: 'User address not found' });
+    }
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ message: 'Internal server error' });
+  }
+};
+
 const addUserCart = async (req, res) => {
   const connection = await getConnection();
-  const { product_id , quantity } = req.body;
+  const { cart } = req.body;
   const { user_id } = req.user;
 
   try {
@@ -351,7 +364,6 @@ const addUserCart = async (req, res) => {
 
     const [existingCart] = await connection.query('SELECT * FROM cart WHERE user_id = ?', [user_id]);
 
-    console.log(existingCart[0].cart_id);
 
     if (existingCart.length > 0) {
       console.log('test12');
@@ -417,8 +429,7 @@ const getUserCart = async (req, res) => {
           price: parseFloat(item.price) * parseInt(item.quantity),
           size: 'M',
           quantity: parseInt(item.quantity) ,
-          imageUrl:
-          "https://cdn.builder.io/api/v1/image/assets/TEMP/3af186bee0e96b7e4e1ca0863a03ae08876653c347feeb5ff29b80be383e39dc?apiKey=c3d84cbd0c3a42f4a1616e4ea278d805&",
+          imageUrl: item.image_url,
       })),
     };
 
@@ -445,20 +456,16 @@ const emptyCart = async (req, res) => {
     const [userData] = await connection.query('SELECT * FROM users WHERE user_id = ?', [user_id]);
 
     if (userData.length > 0) {
-      // ตรวจสอบว่ามีตะกร้าสินค้าของผู้ใช้หรือไม่
       const [cartData] = await connection.query('SELECT * FROM cart WHERE user_id = ?', [user_id]);
 
       console.log(cartData[0].cart_id);
 
       if (cartData.length > 0) {
-        // ลบรายการสินค้าออกจากตะกร้าโดยใช้ product_id
         await connection.query('DELETE FROM cart_item WHERE cart_id = ? AND cart_item_id = ?', [cartData[0].cart_id, cart_item_id]);
 
-        // ตรวจสอบจำนวนสินค้าในตะกร้าหลังจากลบ
         const [cartItemCount] = await connection.query('SELECT COUNT(*) AS itemCount FROM cart_item WHERE cart_id = ?', [cartData[0].cart_id]);
         const itemCount = cartItemCount[0].itemCount;
 
-        // ถ้าไม่มีรายการสินค้าในตะกร้าอีกต่อไป ให้ลบข้อมูลตะกร้าทั้งหมดของผู้ใช้
         if (itemCount === 0) {
           await connection.query('DELETE FROM cart_item WHERE cart_id = ?', [cartData[0].cart_id]);
           await connection.query('DELETE FROM cart WHERE user_id = ?', [user_id]);
@@ -486,15 +493,11 @@ const emptyCart = async (req, res) => {
 };
 
 
-
 /* ----------------------- Order --------------------- */
-/* ยังไม่เสร็จ */
 const createOrder = async (req, res) => {
   const connection = await getConnection();
   const { shippingAddressData, billingAddressData } = req.body;
-  const { user_id } = req.body;
-
-  // console.log(billingAddressData[0].recipient_name);
+  const { user_id } = req.user;
 
   if (!shippingAddressData || !Array.isArray(shippingAddressData) || shippingAddressData.length === 0) {
     return res.status(400).json({ error: 'Shipping address data is missing or invalid' });
@@ -504,83 +507,141 @@ const createOrder = async (req, res) => {
     return res.status(400).json({ error: 'Billing address data is missing or invalid' });
   }
 
+  const orderId = uuidv4();
+  let finalAmount = 0.0;
+
   try {
+    await connection.beginTransaction();
+
     const [userData] = await connection.query('SELECT * FROM users WHERE user_id = ?', [user_id]);
 
     if (userData.length < 0) {
       res.status(404).json({ error: 'User not found' });
+      return;
     }
 
-    const [userCartData] = await connection.query(`SELECT cart_item.product_id , cart_item.quantity , product.price FROM cart 
+    // Find Cart By User
+    const [userCartData] = await connection.query(`SELECT cart_item.product_id , cart_item.quantity , product.price , product.product_name FROM cart 
     INNER JOIN cart_item ON cart.cart_id = cart_item.cart_id 
     INNER JOIN product ON cart_item.product_id = product.product_id 
     WHERE user_id = ?`, [user_id]);
-
-    const orderInsertQuery = `
-      INSERT INTO orders (user_id, order_date, shipping_status, fullfill_status , total_price)
-      VALUES (?, NOW(), 'Pending', 'Unfulfilled', ?)
-    `;
-    const [orderInsertResult] = await connection.query(orderInsertQuery, [user_id, 0]); 
-
-    const orderId = orderInsertResult.insertId;
-
-    let finalAmount = 0;
-
+    
     if (userCartData.length > 0) {
+
+      let lineItems = [];
+      for (const item of userCartData) {
+        console.log(finalAmount)
+        lineItems.push({
+          price_data: {
+            currency: "usd",
+            product_data: {          
+              name: item.product_name,
+              image: item.image_url
+            },
+            unit_amount: item.price * item.quantity * 100,
+          },
+          quantity: item.quantity,
+        });
+      }
+
+      const session = await stripe.checkout.sessions.create({
+      payment_method_types: ["card"],
+        line_items: lineItems,
+        mode: "payment",
+        success_url: `http://localhost:3000/billing?id=${orderId}`,
+        cancel_url: `http://localhost:3000/fail/${orderId}`,
+      });
+
+      const orderData = {
+        session_id: session.id,
+        shipping_status: 'Pending',
+        fullfill_status: session.status,
+        total_price: finalAmount,
+        order_id: orderId,
+        user_id: user_id
+      };
+
+      const query = `
+      INSERT INTO orders (user_id , total_price, shipping_status, fullfill_status, order_id, session_id)
+      VALUES (? , ?, 'Pending' ,? , ?, ?)
+      `;
+
+      const values = [orderData.user_id , orderData.total_price, orderData.fullfill_status,orderData.order_id, orderData.session_id];
+      await connection.query(query, values);
+
       for (const item of userCartData) {
         const { product_id, quantity, price } = item;
         finalAmount += quantity * price;
 
-        const orderDetailsInsertQuery = `
-          INSERT INTO order_details (order_id, product_id, quantity, subtotal_price)
-          VALUES (?, ?, ?, ?)
-        `;
-        await connection.query(orderDetailsInsertQuery, [orderId, product_id, quantity, quantity * price]);
+        const orderDetailsInsertQuery = `INSERT INTO order_details (product_id, quantity, subtotal_price, order_id) VALUES (?, ?, ?, ?)`;
+        await connection.query(orderDetailsInsertQuery, [product_id, quantity, (quantity * price) , orderData.order_id]);
+        await connection.query(`UPDATE product SET reserved_quantity = reserved_quantity - 1 WHERE product_id = ?`, [product_id]);
       }
+      
+      await connection.query("UPDATE orders SET total_price = ? WHERE order_id = ?", [finalAmount, orderData.order_id]);
+      const order_id = orderData.order_id;
+
+      // Insert shipping address
+      const shippingAddressId = await insertShippingAddress(user_id, order_id, shippingAddressData);
+      const billingAddressId = await insertBillingAddress(user_id, order_id, billingAddressData);
+
+      await connection.query("UPDATE orders SET shipping_address_id = ? , billing_address_id = ? WHERE order_id = ?", [shippingAddressId, billingAddressId, order_id]);
+      await connection.query(`DELETE cart_item.* FROM cart INNER JOIN cart_item ON cart.cart_id = cart_item.cart_id WHERE cart.user_id = ?`, [user_id]);
+      await connection.commit();
+
+      res.json({
+        message: "Checkout success.",
+        id: session.id,
+        orderData: orderData,
+      });
     }
-
-    const orderUpdateQuery = `
-      UPDATE orders
-      SET total_price = ?
-      WHERE order_id = ?
-    `;
-    await connection.query(orderUpdateQuery, [finalAmount, orderId]);
-
-    // Insert shipping address
-    await insertShippingAddress(user_id, shippingAddressData);
-
-    // Insert billing address
-    await insertBillingAddress(user_id, billingAddressData);
-
-    res.json({ message: "success" });
+    else {
+      res.status(400).json({
+        message: "Checkout Not Success.",
+      });
+    }
   } catch (error) {
-    console.error(error);
-    res.status(500).json({ error: 'Internal Server Error' });
+    await connection.rollback();
+    console.error("Error creating order:", error);
+    res.status(400).json({ error: "Error payment" });
   } finally {
     connection.destroy();
   }
 };
 
-const getOrder = async (req, res) => {
+
+const getOrderById = async (req, res) => {
   const connection = await getConnection();
-  // const { user_id } = req.user;
-  const { user_id , order_id } = req.body;
+  const orderId = req.params.id;
 
   try {
-    const [rows] = await connection.query('SELECT * FROM orders WHERE user_id = ?', [user_id]);
+    const [rows] = await connection.query('SELECT * FROM orders WHERE order_id = ?', [orderId]);
 
     if (rows.length > 0) {
-      const orderId = order_id;
       const [productRow] = await connection.query(`
-      SELECT * FROM order_details
+      SELECT product.product_name , product.size , product.image_url , order_details.quantity , subtotal_price , users.first_name , users.last_name , users.email , orders.* FROM order_details
       INNER JOIN product ON product.product_id = order_details.product_id
       INNER JOIN orders ON orders.order_id = order_details.order_id
+      INNER JOIN users ON users.user_id = orders.user_id
       WHERE orders.order_id = ?
     `, [orderId]);
 
-  
+    const [shippingRow] = await connection.query(`
+    SELECT shipping_address.* FROM orders
+    INNER JOIN shipping_address ON shipping_address.address_id = orders.shipping_address_id
+    WHERE orders.order_id = ?
+    `, [orderId]);
+
+    const [billingRow] = await connection.query(`
+    SELECT billing_address.* FROM orders
+    INNER JOIN billing_address ON billing_address.address_id = orders.billing_address_id
+    WHERE orders.order_id = ?
+   `, [orderId]);
+
       const userOrder = {
-        detail: productRow
+        detail: productRow,
+        shipping:shippingRow,
+        billing:billingRow
       };
 
       res.json(userOrder);
@@ -627,6 +688,7 @@ const updateOrderStatus = async (req, res) => {
 const getAllOrder = async (req, res) => {
   const connection = await getConnection();
 
+
   try { 
     const [allUserOrders] = await connection.query('SELECT * FROM orders');
     res.json(allUserOrders);
@@ -640,20 +702,15 @@ const getAllOrder = async (req, res) => {
 
 const getOrderByUserId = async (req, res) => {
   const connection = await getConnection();
-  const { id } = req.params;
+  const { user_id } = req.user;
   
   try {
-    const [rows] = await connection.query('SELECT * FROM orders WHERE order_id = ?', [id]);
+    const [rows] = await connection.query('SELECT * FROM orders WHERE user_id = ?', [user_id]);
     
     if (rows.length > 0) {
-      const orderId = rows[0].order_id;
-      const [productRows] = await connection.query('SELECT * FROM products WHERE order_id = ?', [orderId]);
-      const [userRows] = await connection.query('SELECT * FROM users WHERE id = ?', [rows[0].user_id]);
 
       const userOrderData = {
-        order: rows[0],
-        products: productRows,
-        orderId: userRows[0]
+        orders:rows
       };
 
       res.json(userOrderData);
@@ -806,149 +863,6 @@ const createReceipt = async (req, res) => {
     connection.destroy();
   }
 };
-// const createOrder = async (req, res) => {
-//   const connection = await getConnection();
-//   const { shippingAddressData , billingAddressData } = req.body;
-//   const { user_id } = req.body;
-//   // const { user_id } = req.user;
- 
-
-//   // if (!shippingAddressData || !Array.isArray(shippingAddressData) || shippingAddressData.length === 0) {
-//   //   return res.status(400).json({ error: 'Shipping address data is missing or invalid' });
-//   // }
-  
-//   // if (!billingAddressData || !Array.isArray(billingAddressData) || billingAddressData.length === 0) {
-//   //   return res.status(400).json({ error: 'Billing address data is missing or invalid' });
-//   // }
-
-//   try {
-   
-//     const [userData] = await connection.query('SELECT * FROM users WHERE user_id = ?', [user_id]);
-
-
-//     if (userData.length < 0) {
-//       res.status(404).json({ error: 'User not found' });
-//     }
- 
-//     // const { recipientName: shippingRecipientName, addressLine1: shippingAddressLine1, addressLine2: shippingAddressLine2, city: shippingCity, postalCode: shippingPostalCode, country: shippingCountry, phoneNumber: shippingPhoneNumber } = shippingResult;
-//     // const { recipientName: billingRecipientName, addressLine1: billingAddressLine1, addressLine2: billingAddressLine2, city: billingCity, postalCode: billingPostalCode, country: billingCountry, phoneNumber: billingPhoneNumber } = billingResult;
-
-//     // const shippingResult = await insertShippingAddress(user_id, shippingAddressData);
-//     // const billingResult = await insertBillingAddress(user_id, billingAddressData);
-
-
-//     const [userCartData] = await connection.query(`SELECT cart_item.product_id , cart_item.quantity , product.price FROM cart 
-//     INNER JOIN cart_item ON cart.cart_id = cart_item.cart_id 
-//     INNER JOIN product ON cart_item.product_id = product.product_id 
-//     WHERE user_id = ?`, [user_id]);
-
-//     console.log(userCartData);
-
-
-    
-    
-
-//     const orderInsertQuery = `
-//       INSERT INTO orders (user_id, order_date, shipping_status, fullfill_status , total_price)
-//       VALUES (?, NOW(), 'Pending', 'Unfulfilled', '')
-//     `;
-//     const [orderInsertResult] = await connection.query(orderInsertQuery, [user_id]);
-//     const orderId = orderInsertResult.insertId;
-
-
-//     /* check type why is nan  TaxID , receiver*/
-//     let finalAmount = 0;
-//     if (userCartData.length > 0) {
-//       finalAmount = userCartData.reduce((total, item) => {
-//         console.log(item.quantity , item.price);
-//         const orderDetailsInsertQuery = `
-//           INSERT INTO order_details (order_id, product_id, quantity, subtotal_price)
-//           VALUES (?, ?, ?, ?)
-//         `;
-
-//         const productUpdate = [orderId, product_id, quantity, item.quantity * item.price];
-//         await connection.query(orderDetailsInsertQuery, productUpdate);
-//         return item.quantity * item.price;
-//       }, 0);
-//     }
-
-//     console.log(finalAmount);
-    
-
-//     const orderUpdateQuery = `
-//     UPDATE orders
-//     SET total_price = ?
-//     WHERE user_id=?
-//     `;
-//     const [orderUpdateResult] = await connection.query(orderUpdateQuery, [finalAmount, user_id]);
-
-
-
-//     res.json({ message: "success" });
-//   } catch (error) {
-
-//     console.error(error);
-//     res.status(500).json({ error: 'Internal Server Error' });
-//   } finally {
-
-//     connection.destroy();
-//   }
-// };
-
-
-
-
-
-
-// const getAllOrders = async (req, res) => {
-//   try {
-//     const alluserorders = await Order.find()
-//       .populate("product.product")
-//       .populate("orderby")
-//       .exec();
-//     res.json(alluserorders);
-//   } catch (error) {
-//     throw new Error(error);
-//   }
-// };
-
-// const getOrderByUserId = asyncHandler(async (req, res) => {
-//   const { id } = req.params;
-//   validateMongoDbId(id);
-//   try {
-//     const userorders = await Order.findOne({ orderby: id })
-//       .populate("product.product")
-//       .populate("orderby")
-//       .exec();
-//     res.json(userorders);
-//   } catch (error) {
-//     throw new Error(error);
-//   }
-// });
-
-// const updateOrderStatus = asyncHandler(async (req, res) => {
-//   const { status } = req.body;
-//   const { id } = req.params;
-//   validateMongoDbId(id);
-//   try {
-//     const updateOrderStatus = await Order.findByIdAndUpdate(
-//       id,
-//       {
-//         orderStatus: status,
-//         paymentIntent: {
-//           status: status,
-//         },
-//       },
-//       { new: true }
-//     );
-//     res.json(updateOrderStatus);
-//   } catch (error) {
-//     throw new Error(error);
-//   }
-// });
-
-  
-
 
 module.exports = {
   userRegister,
@@ -962,14 +876,13 @@ module.exports = {
   getUserCart,
   emptyCart,
   createOrder,
-  getOrder,
+  getOrderById,
   updateOrderStatus,
   getCheckLogin,
   getAllOrder,
   getOrderByUserId,
   createInvoice ,
   getInvoiceById,
-  // googleAuth,
-  // googleCallback,
-  // successRedirect
+  getAddress 
+  // getHandleEventHook
 };

@@ -14,17 +14,20 @@ const {
     getUserCart,
     emptyCart,
     createOrder,
-    getOrder,
+    getOrderById,
     updateOrderStatus,
     getCheckLogin,
     getAllOrder,
     createInvoice ,
     getInvoiceById,
+    getOrderByUserId,
+    getAddress
+    // getHandleEventHook,
 } = require('../controller/userController')
 
 const authAccess = require('../middleware/authAccess')
 const authRefresh = require('../middleware/authRefresh')
-const isAdmin = require('../middleware/isAdmin')
+const isAdmin = require('../middleware/isAdmin');
 const router = express.Router()
 
 // router.put('/update-user', updatedUser);
@@ -41,13 +44,14 @@ router.post('/login', userLogin);
 router.post('/refresh', authRefresh  , createRefreshToken);
 router.get('/check-login', authAccess  , getCheckLogin);
 
-router.put('/save-address', authAccess, saveAddress);
+router.put('/save-address', authAccess ,saveAddress);
+router.get('/get-address', authAccess, getAddress);
 
 router.post('/create-order', authAccess, createOrder);
-router.get('/get-order', authAccess, getOrder);
+router.get('/get-order/:id', authAccess, getOrderById);
 router.put('/order/update-order/:id' , authAccess ,updateOrderStatus);
 router.get('/get-all-orders', getAllOrder);
-router.post('/get-order-by-user/:id', getAllOrder);
+router.get('/get-order-by-user',  authAccess, getOrderByUserId);
 
 router.get('/get-invoice/:id', getInvoiceById);
 router.post('/create-invoice', createInvoice);
@@ -58,12 +62,13 @@ router.get('/google', passport.authenticate('google', { scope: ['email', 'profil
 
 router.get('/google/callback', passport.authenticate('google', { failureRedirect: 'http://localhost:3000/login' }), async (req, res) => {
     const profile = req.user; 
-    const access_token = generateAccessToken(profile.user_id, req.user.role);
-    const refresh_token = generateRefreshToken(profile.user_id, req.user.role); 
+    const access_token = generateAccessToken(profile.user_id, profile.user_type);
+    const refresh_token = generateRefreshToken(profile.user_id, profile.user_type); 
 
-    console.log(access_token,refresh_token);
+    console.log('access 1 -->',access_token);
+    console.log('refresh 2 -->',refresh_token)
 
-    if(req.user.role === 'admin'){
+    if(req.user.role === 'user_admin' || req.user.role === 'super_admin' || req.user.role === 'admin'){
         return res.redirect(`http://localhost:3000/dashboard`);
     }
     else {
@@ -71,10 +76,6 @@ router.get('/google/callback', passport.authenticate('google', { failureRedirect
     }
     
 });
-
-
-
-/*----------------------------------------------------------*/
 
 module.exports = router
 

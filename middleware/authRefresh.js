@@ -1,5 +1,4 @@
 const jwt = require('jsonwebtoken');
-const dbConnect = require('../config/dbConnect');
 
 const verifyRefreshToken = async (req, res, next) => {
     try {
@@ -11,18 +10,18 @@ const verifyRefreshToken = async (req, res, next) => {
 
         const refreshToken = tokenRefresh.split(' ')[1];
 
-        jwt.verify(refreshToken, process.env.JWT_REFRESH_SECRET, (err, decoded) => {
-            if (err) {
-                return res.status(401).json({ error: 'Invalid refresh token' });
-            }
+        const decoded = jwt.verify(refreshToken, process.env.JWT_REFRESH_SECRET);
+        if (!decoded) {
+            return res.status(401).json({ error: 'Invalid refresh token' });
+        }
 
-            req.user = decoded;
-            req.user.token = tokenRefresh;
-            delete req.user.exp;
-            delete req.user.iat;
+        req.user = decoded;
+        console.log(req.user);
+        delete req.user.exp;
+        delete req.user.iat;
 
-            next();
-        });
+        next();
+
     } catch (error) {
         return res.status(500).json({ error: 'An error occurred while fetching user data.' });
     }

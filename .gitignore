@@ -1,4 +1,4 @@
 .env
-scannerwork
+.scannerwork/
 node_modules/
 build/
