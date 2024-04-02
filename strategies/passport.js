@@ -17,8 +17,10 @@ async function(request, accessToken, refreshToken, profile, done) {
         const [rows] = await connection.query('SELECT * FROM users WHERE google_id = ? ', [profile.id]);
      
         console.log(rows.length);
-
+    
         const [userExist] = await connection.query('SELECT * FROM users WHERE google_id IS NULL AND email = ?', [profile.emails[0].value]);
+
+        console.log(userExist)
 
         if (rows.length > 0) {        
             // ผู้ใช้มีอยู่ในฐานข้อมูล
@@ -30,7 +32,7 @@ async function(request, accessToken, refreshToken, profile, done) {
             let role = 'member';
             if (/^[^\s@]+@kmitl\.ac\.th$/.test(newUser.email)) {
                 role = 'admin';
-            } 
+            }
 
             const newUser = {
                 google_id: profile.id,

@@ -14,10 +14,10 @@ const createProduct = async (req, res) => {
 
   try {
 
-    const { product_name, description, price , imgage_url , measurement } = req.body;
+    const { product_name, description, price , image_url , measurement } = req.body;
 
-    const createProductQuery = 'INSERT INTO product (product_name , description, price , imgage_url , measurement) VALUES (?, ?, ?, ?, ?)';
-    const [newProduct] = await connection.query(createProductQuery, [product_name, description, price, imgage_url , measurement]);
+    const createProductQuery = 'INSERT INTO product (product_name , description, price , image_url , measurement) VALUES (?, ?, ?, ?, ?)';
+    const [newProduct] = await connection.query(createProductQuery, [product_name, description, price, image_url , measurement]);
   
     res.json({ id: newProduct.insertId, product_name, description, price });
 
