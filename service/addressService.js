@@ -13,7 +13,7 @@ const insertShippingAddress = async (userId ,orderId, shippingAddressData) => {
         phone_number
       } = shippingAddressData[0];
 
-      console.log(shippingAddressData);
+      console.log(shippingAddressData[0]);
 
  
       const query = `

@@ -575,7 +575,7 @@ const createOrder = async (req, res) => {
 
         const orderDetailsInsertQuery = `INSERT INTO order_details (product_id, quantity, subtotal_price, order_id) VALUES (?, ?, ?, ?)`;
         await connection.query(orderDetailsInsertQuery, [product_id, quantity, (quantity * price) , orderData.order_id]);
-        await connection.query(`UPDATE product SET reserved_quantity = reserved_quantity - 1 WHERE product_id = ?`, [product_id]);
+        await connection.query(`UPDATE product SET reserved_quantity = reserved_quantity + 1 WHERE product_id = ?`, [product_id]);
       }
       
       await connection.query("UPDATE orders SET total_price = ? WHERE order_id = ?", [finalAmount, orderData.order_id]);
@@ -584,6 +584,8 @@ const createOrder = async (req, res) => {
       // Insert shipping address
       const shippingAddressId = await insertShippingAddress(user_id, order_id, shippingAddressData);
       const billingAddressId = await insertBillingAddress(user_id, order_id, billingAddressData);
+
+      console.log(shippingAddressId , billingAddressId)
 
       await connection.query("UPDATE orders SET shipping_address_id = ? , billing_address_id = ? WHERE order_id = ?", [shippingAddressId, billingAddressId, order_id]);
       await connection.query(`DELETE cart_item.* FROM cart INNER JOIN cart_item ON cart.cart_id = cart_item.cart_id WHERE cart.user_id = ?`, [user_id]);
@@ -688,9 +690,8 @@ const updateOrderStatus = async (req, res) => {
 const getAllOrder = async (req, res) => {
   const connection = await getConnection();
 
-
   try { 
-    const [allUserOrders] = await connection.query('SELECT * FROM orders');
+    const [allUserOrders] = await connection.query('SELECT orders.* , users.first_name , users.last_name FROM orders INNER JOIN users ON orders.user_id = users.user_id');
     res.json(allUserOrders);
   } catch (error) {
     throw new Error(error);
@@ -698,7 +699,6 @@ const getAllOrder = async (req, res) => {
     connection.destroy();
   }
 };
-
 
 const getOrderByUserId = async (req, res) => {
   const connection = await getConnection();
@@ -864,6 +864,75 @@ const createReceipt = async (req, res) => {
   }
 };
 
+const getDashboardAdmin = async (req, res) => {
+  const connection = await getConnection();
+
+  try { 
+    const [allTotal] = await connection.query(`SELECT 
+      SUM(orders.total_price) AS total_earning,
+      COUNT(orders.order_id) AS total_orders
+    FROM 
+      orders
+    INNER JOIN 
+      order_details ON order_details.order_id = orders.order_id`);
+
+    const [totalCustomer] = await connection.query(`SELECT 
+      COUNT(*) AS total_customers
+      FROM 
+        user_accounts
+      WHERE
+        user_accounts.user_type = 'member'`);
+
+    const [totalProduct] = await connection.query(`SELECT 
+      COUNT(*) AS total_products
+      FROM 
+        product`);
+
+    const [totalMonthly] = await connection.query(`SELECT 
+    m.month,
+    COALESCE(SUM(o.total_price), 0.00) AS total_earning
+    FROM 
+        (SELECT DATE_FORMAT(DATE_SUB(CURRENT_DATE, INTERVAL n MONTH), '%Y-%m') AS month
+        FROM (SELECT 0 AS n UNION SELECT 1) AS numbers) AS m
+    LEFT JOIN 
+        orders o ON DATE_FORMAT(o.order_date, '%Y-%m') = m.month
+    GROUP BY 
+        m.month
+    ORDER BY 
+        m.month DESC;`);
+
+    const [topCategorie] = await connection.query(`SELECT 
+      SUM(od.quantity) AS total_quantity,
+      pt.type_name
+      FROM 
+          order_details od
+      JOIN 
+          product p ON od.product_id = p.product_id
+      JOIN 
+          product_type pt ON p.product_type_id = pt.product_type_id
+      GROUP BY 
+          p.product_type_id 
+      ORDER BY 
+          total_quantity DESC
+      LIMIT 3;`);
+   
+    res.json({
+      allTotal: {
+        total_earning: allTotal[0].total_earning,
+        total_orders: allTotal[0].total_orders,
+        total_customers: totalCustomer[0].total_customers,
+        total_products: totalProduct[0].total_products
+      },
+      totalMonthly: totalMonthly,
+      topCategories: topCategorie
+    });
+  } catch (error) {
+    throw new Error(error);
+  } finally {
+    connection.destroy();
+  }
+};
+
 module.exports = {
   userRegister,
   userLogin,
@@ -883,6 +952,6 @@ module.exports = {
   getOrderByUserId,
   createInvoice ,
   getInvoiceById,
-  getAddress 
-  // getHandleEventHook
+  getAddress,
+  getDashboardAdmin
 };

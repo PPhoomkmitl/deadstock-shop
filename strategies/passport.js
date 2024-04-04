@@ -20,7 +20,7 @@ async function(request, accessToken, refreshToken, profile, done) {
 
         // const [userExist] = await connection.query('SELECT * FROM users WHERE google_id IS NULL AND email = ?', [profile.emails[0].value]);
 
-        console.log(userExist)
+        // console.log(userExist)
 
         if (rows.length > 0) {        
             // ผู้ใช้มีอยู่ในฐานข้อมูล
@@ -30,11 +30,11 @@ async function(request, accessToken, refreshToken, profile, done) {
         } else if(rows.length === 0) {
             const [userExist] = await connection.query('SELECT * FROM users WHERE google_id IS NULL AND email = ?', [profile.emails[0].value]);
             if(userExist.length === 0) {
-                
+
                 // สร้างผู้ใช้ใหม่และบันทึกลงในฐานข้อมูล
                 let role = 'member';
                 if (/^[^\s@]+@kmitl\.ac\.th$/.test(profile.emails[0].value)) {
-                    role = 'admin';
+                    role = 'user_admin';
                 } 
              
                 const newUser = {
@@ -54,10 +54,9 @@ async function(request, accessToken, refreshToken, profile, done) {
                     return done(error);
                 }
                 
-                const userId = userData.insertId;              
+                const userId = userData.insertId;        
                 const [userAccountData] = await connection.query('INSERT INTO user_accounts (user_id ,password, user_type) VALUES (?, ?, ?)', [userId ,'google_auth',  role]);
-        
-                console.log('userData',newUser);
+            
                 if (userAccountData.length === 0) {
                     console.error('Error inserting user:', error);
                     return done(error);
@@ -71,14 +70,13 @@ async function(request, accessToken, refreshToken, profile, done) {
                 console.log('User successfully:',rows.length);
                 return done(null, rows[0]);
             }
-
         }
         else {
             return done(new Error('User already have'));
         }
        
     } catch (error) {
-        return done(new Error('User not found'));
+        return done(new Error(error));
     }
 }
 ));

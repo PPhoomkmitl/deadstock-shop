@@ -21,7 +21,8 @@ const {
     createInvoice ,
     getInvoiceById,
     getOrderByUserId,
-    getAddress
+    getAddress,
+    getDashboardAdmin
     // getHandleEventHook,
 } = require('../controller/userController')
 
@@ -49,13 +50,14 @@ router.get('/get-address', authAccess, getAddress);
 
 router.post('/create-order', authAccess, createOrder);
 router.get('/get-order/:id', authAccess, getOrderById);
-router.put('/order/update-order/:id' , authAccess ,updateOrderStatus);
-router.get('/get-all-orders', getAllOrder);
+router.put('/order/update-order/:id' , authAccess ,isAdmin ,updateOrderStatus);
+router.get('/get-all-orders', authAccess ,getAllOrder);
 router.get('/get-order-by-user',  authAccess, getOrderByUserId);
 
-router.get('/get-invoice/:id', getInvoiceById);
-router.post('/create-invoice', createInvoice);
+router.get('/get-invoice/:id',authAccess ,  getInvoiceById);
+router.post('/create-invoice', authAccess , createInvoice);
 
+router.get('/get-dashboard', getDashboardAdmin);
 
 /*----------------------- Google OAuth ----------------------*/
 router.get('/google', passport.authenticate('google', { scope: ['email', 'profile'] }));
@@ -68,8 +70,10 @@ router.get('/google/callback', passport.authenticate('google', { failureRedirect
     console.log('access 1 -->',access_token);
     console.log('refresh 2 -->',refresh_token)
 
-    if(req.user.role === 'user_admin' || req.user.role === 'super_admin' || req.user.role === 'admin'){
-        return res.redirect(`http://localhost:3000/dashboard`);
+    console.log('profile.user_type' , profile.user_type)
+
+    if(profile.user_type === 'user_admin' || profile.user_type === 'super_admin'){
+        return res.redirect(`http://localhost:3000/dashboard?access_token=${access_token}&refresh_token=${refresh_token}`);
     }
     else {
         return res.redirect(`http://localhost:3000?access_token=${access_token}&refresh_token=${refresh_token}`);

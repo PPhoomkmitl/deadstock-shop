@@ -19,7 +19,7 @@ router.get('/get-all', getAllProduct);
 // router.get('/get-search', getSearchProduct);
 
 // router.post('/create', authAccess ,createProduct);
-router.post('/create',createProduct); // Temporary Use
+router.post('/create', authAccess , isAdmin ,createProduct); // Temporary Use
 
 router.put('/update/:id', authAccess ,updateProduct);
 router.put('/update-stock/:id', authAccess , updateStockProduct);

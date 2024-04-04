@@ -2,3 +2,4 @@
 .scannerwork/
 node_modules/
 build/
+.env
