@@ -50,8 +50,10 @@ router.get('/get-address', authAccess, getAddress);
 
 router.post('/create-order', authAccess, createOrder);
 router.get('/get-order/:id', authAccess, getOrderById);
-router.put('/order/update-order/:id' , authAccess ,isAdmin ,updateOrderStatus);
-router.get('/get-all-orders', authAccess ,getAllOrder);
+// router.put('/order/update-order/:id' , authAccess ,updateOrderStatus);
+router.put('/order/update-order/' ,updateOrderStatus);
+
+router.get('/get-all-orders', getAllOrder);
 router.get('/get-order-by-user',  authAccess, getOrderByUserId);
 
 router.get('/get-invoice/:id',authAccess ,  getInvoiceById);
