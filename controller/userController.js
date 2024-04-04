@@ -660,16 +660,18 @@ const updateOrderStatus = async (req, res) => {
   const connection = await getConnection();
   const { status , order_id } = req.body;
 
+  console.log(status," ",order_id)
+
   try {
     await connection.beginTransaction();
 
 
     const [result] = await connection.query(
-      'UPDATE orders SET orderStatus = ?, paymentIntent_status = ? WHERE order_id = ?',
-      [status, status, order_id]
+      'UPDATE orders SET shipping_status = ? WHERE order_id = ?',
+      [status, order_id]
     );
 
-    if (result.affectedRows === 1) {
+    if (result.affectedRows) {
       const [updatedOrder] = await connection.query('SELECT * FROM orders WHERE order_id = ?', [order_id]);
       await connection.commit(); // commit transaction หากทุกอย่างเรียบร้อย
       res.json(updatedOrder[0]);
