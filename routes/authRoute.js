@@ -31,9 +31,7 @@ const authRefresh = require('../middleware/authRefresh')
 const isAdmin = require('../middleware/isAdmin');
 const router = express.Router()
 
-// router.put('/update-user', updatedUser);
 router.post('/admin-login', isAdmin ,loginAdmin);
-// router.post('/admin-protected', isAdmin);
 
 router.get('/cart', authAccess , getUserCart);
 router.delete('/clear-cart/:id', authAccess , emptyCart);
@@ -48,18 +46,17 @@ router.get('/check-login', authAccess  , getCheckLogin);
 router.put('/save-address', authAccess ,saveAddress);
 router.get('/get-address', authAccess, getAddress);
 
-router.post('/create-order', authAccess, createOrder);
+router.post('/create-order', authAccess, isAdmin ,createOrder);
 router.get('/get-order/:id', authAccess, getOrderById);
-// router.put('/order/update-order/:id' , authAccess ,updateOrderStatus);
-router.put('/order/update-order/' ,updateOrderStatus);
+router.put('/order/update-order' , authAccess , isAdmin ,updateOrderStatus);
 
-router.get('/get-all-orders', getAllOrder);
+router.get('/get-all-orders', authAccess ,getAllOrder);
 router.get('/get-order-by-user',  authAccess, getOrderByUserId);
 
 router.get('/get-invoice/:id',authAccess ,  getInvoiceById);
 router.post('/create-invoice', authAccess , createInvoice);
 
-router.get('/get-dashboard', getDashboardAdmin);
+router.get('/get-dashboard', authAccess , isAdmin ,getDashboardAdmin);
 
 /*----------------------- Google OAuth ----------------------*/
 router.get('/google', passport.authenticate('google', { scope: ['email', 'profile'] }));
