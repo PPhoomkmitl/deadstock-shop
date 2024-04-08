@@ -13,18 +13,10 @@ passport.use(new GoogleStrategy({
 async function(request, accessToken, refreshToken, profile, done) {
     try {
         const connection = await createConnection();
-        console.log(profile.id);
         const [rows] = await connection.query('SELECT * FROM users INNER JOIN user_accounts ON user_accounts.user_id = users.user_id WHERE google_id = ? ', [profile.id]);
         
-        console.log(rows.length);
-
-        // const [userExist] = await connection.query('SELECT * FROM users WHERE google_id IS NULL AND email = ?', [profile.emails[0].value]);
-
-        // console.log(userExist)
-
         if (rows.length > 0) {        
             // ผู้ใช้มีอยู่ในฐานข้อมูล
-            console.log('User successfully:',rows.length);
             return done(null, rows[0]);
 
         } else if(rows.length === 0) {
@@ -45,7 +37,6 @@ async function(request, accessToken, refreshToken, profile, done) {
                     role: role
                 };
 
-                console.log(newUser);
                 const [userData] = await connection.query('INSERT INTO users (first_name, last_name, email, registration_date, google_id) VALUES (?, ?, ?, NOW(), ?)', [newUser.firstname, newUser.lastname, newUser.email, newUser.google_id]);
 
                 // ตรวจสอบว่ามีข้อมูลผู้ใช้ที่ถูกสร้างขึ้นหรือไม่

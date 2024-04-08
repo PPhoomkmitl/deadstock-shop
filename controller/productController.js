@@ -14,10 +14,10 @@ const createProduct = async (req, res) => {
 
   try {
 
-    const { product_name, description, price , image_url , measurement, size, product_type_id } = req.body;
+    const { product_name, description, price , image_url , measurement, on_hand_quantity, size, product_type_id } = req.body;
 
-    const createProductQuery = 'INSERT INTO product (product_name , description, price , image_url , measurement, size, product_type_id) VALUES (?, ?, ?, ?, ?, ?, ?)';
-    const [newProduct] = await connection.query(createProductQuery, [product_name, description, price, image_url , measurement, size, product_type_id]);
+    const createProductQuery = 'INSERT INTO product (product_name , description, price , image_url , measurement, on_hand_quantity , size, product_type_id) VALUES (?, ? , ?, ?, ?, ?, ?, ?)';
+    const [newProduct] = await connection.query(createProductQuery, [product_name, description, price, image_url , measurement, on_hand_quantity, size, product_type_id]);
   
     res.json({ id: newProduct.insertId, product_name, description, price });
 
@@ -91,8 +91,6 @@ const getProduct = async (req, res) => {
     const connection = await getConnection();
     const productId = escapeHtml(req.params.id); 
 
-    // console.log(productId);
-   
     try {
  
       const getProductQuery = 'SELECT * FROM product WHERE product_id=?';
@@ -115,8 +113,7 @@ const getProduct = async (req, res) => {
 const getAllProduct = async (req, res) => {
   const connection = await getConnection();
   try {
-    console.log('123');
-    const getProductQuery = 'SELECT * FROM product';
+    const getProductQuery = 'SELECT * FROM product LIMIT 8';
     // Execute the query
     const [products] = await connection.query(getProductQuery);
 

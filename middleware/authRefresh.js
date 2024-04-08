@@ -16,7 +16,6 @@ const verifyRefreshToken = async (req, res, next) => {
         }
 
         req.user = decoded;
-        console.log(req.user);
         delete req.user.exp;
         delete req.user.iat;
 

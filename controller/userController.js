@@ -5,53 +5,65 @@ const getConnection = require('../config/dbConnect');
 const { v4: uuidv4 } = require('uuid');
 require('dotenv').config();
 
+const ZeroBounceSDK = require('@zerobounce/zero-bounce-sdk')
+const zeroBounce = new ZeroBounceSDK();
+zeroBounce.init(process.env.ZEROBOUNCE_API_KEY);
 
 const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY)
-const endpointSecret = 'whsec_c3132e9310d21ee7a14ef87ec961c365cb15fb372397e6581886d85a1621d956'
 
-// const decrypt = require('decrypt');
 const { insertShippingAddress, insertBillingAddress } = require('../service/addressService');
 require("../routes/authRoute");
 
 /*------------------- User Side-------------------- */
 const userRegister = async (req, res) => {
   try {
-    const { firstname, lastname, email, password } = req.body;
+    const { firstname, lastname, email, password , ip_address } = req.body;
+    console.log(firstname, lastname, email, password , ip_address);
     const connection = await getConnection();
     await connection.beginTransaction();
 
     try {
-      // Check if the email is already in use
-      const [existingUser] = await connection.query('SELECT * FROM users WHERE email = ?', [email]);
+      if (/^[^\s@]+@kmitl\.ac\.th$/.test(email)) {
+        return res.status(400).json({ message: "Unable to complete registration" });
+      } 
+      
+      const emailValidationResponse = await zeroBounce.validateEmail(email, ip_address);
+      console.log(emailValidationResponse)
+        if (emailValidationResponse.status === 'valid') {
 
-      if (existingUser.length > 0) {
-        await connection.rollback();
-        return res.status(400).json({ message: "Email is already in use" });
+          // Check if the email is already in use
+          const [existingUser] = await connection.query('SELECT * FROM users WHERE email = ?', [email]);
+
+          if (existingUser.length > 0) {
+            await connection.rollback();
+            return res.status(400).json({ message: "Email is already in use" });
+          }
+
+          const salt = await bcrypt.genSalt(10);
+          const hashedPassword = await bcrypt.hash(password, salt);
+
+          // If email is not in use, proceed with user registration
+          const [result_user] = await connection.query('INSERT INTO users( email , first_name , last_name ) VALUES (?, ? , ?)', [email , firstname , lastname]);
+      
+          if (result_user.affectedRows > 0) {
+            const insertedUserId = result_user.insertId;
+            const [result_user_account] = await connection.query('INSERT INTO user_accounts( user_id , password , user_type ) VALUES (?, ? , ?)', [insertedUserId , hashedPassword , 'member']);
+      
+            if (result_user_account.affectedRows > 0) {
+              await connection.commit();
+              return res.status(201).json({ message: "Registration successful" });
+            }
+          }
       }
-
-      const salt = await bcrypt.genSalt(10);
-      const hashedPassword = await bcrypt.hash(password, salt);
-
-      // If email is not in use, proceed with user registration
-      const [result_user] = await connection.query('INSERT INTO users( email , first_name , last_name ) VALUES (?, ? , ?)', [email , firstname , lastname]);
-  
-      if (result_user.affectedRows > 0) {
-        const insertedUserId = result_user.insertId;
-        console.log('User ID:', insertedUserId);
-  
-        const [result_user_account] = await connection.query('INSERT INTO user_accounts( user_id , password , user_type ) VALUES (?, ? , ?)', [insertedUserId , hashedPassword , 'member']);
-  
-        if (result_user_account.affectedRows > 0) {
-          await connection.commit();
-          return res.status(201).json({ message: "Registration successful" });
-        }
+      else {
+        return res.status(400).json({ message: "Invalid Email"  })
       }
 
       // If any of the conditions fails, rollback the transaction
       await connection.rollback();
   
       // Return an error response
-      return res.status(401).json({ message: "Unable to complete registration" });
+      return res.status(400).json({ message: "Unable to complete registration" });
   
     } catch (error) {
       await connection.rollback();
@@ -82,7 +94,7 @@ const userLogin = async (req, res) => {
     if (result.length > 0) {
       const passwordMatch = await bcrypt.compare(Password, result[0].password);
 
-      console.log(passwordMatch);
+
 
       if (!passwordMatch) {
         return res.status(401).json({ message: "Username or password incorrect" });
@@ -136,11 +148,9 @@ const createRefreshToken = async (req, res) => {
   await connection.beginTransaction();
 
   try {
-    console.log(req.user);
     const [result] = await connection.query('SELECT users.user_id , user_accounts.user_type AS role FROM users INNER JOIN user_accounts ON user_accounts.user_id = users.user_id WHERE users.user_id = ?', [req.user.user_id]);
     if (result.length > 0) {
       const userData = result[0];
-      console.log('Refresh', userData)
       const access_token = generateAccessToken(userData.user_id , userData.role);
       const refresh_token = generateRefreshToken(userData.user_id , userData.role);
    
@@ -176,12 +186,11 @@ const loginAdmin = async (req, res) => {
 
     // Validate email and password
     if (!Email || !Password) {
-      return res.status(400).json({ error: "Email and password are required" });
+      return res.status(401).json({ error: "Email and password are required" });
     }
 
     const [result] = await connection.query('SELECT users.email, user_accounts.password , user_accounts.user_type FROM user_accounts INNER JOIN users ON users.user_id = user_accounts.user_id WHERE email = ?', [Email]);
     
-    console.log(result);
     if (result.length > 0) {
       const passwordMatch = await bcrypt.compare(Password, result[0].password);
 
@@ -290,8 +299,6 @@ const saveAddress = async (req, res) => {
     await connection.beginTransaction();
 
     const { address_line1 , address_line2 , city , postal_code , country} = req.body;
-
-    console.log(user_id , address_line1 );
     const [result] = await connection.query(
       'SELECT * FROM user_address WHERE user_id = ?',
       [user_id]
@@ -365,8 +372,7 @@ const addUserCart = async (req, res) => {
     const [existingCart] = await connection.query('SELECT * FROM cart WHERE user_id = ?', [user_id]);
 
 
-    if (existingCart.length > 0) {
-      console.log('test12');
+    if (existingCart.length > 0) {;
       const [existingCartItems] = await connection.query('SELECT * FROM cart_item WHERE cart_id = ?', [existingCart[0].cart_id]);
       const existingCartItemsMap = new Map(existingCartItems.map(item => [item.product_id, item]));
 
@@ -388,7 +394,6 @@ const addUserCart = async (req, res) => {
       for (let i = 0; i < cart.length; i++) {
         const product_id = cart[i].product_id;
         const quantity = cart[i].quantity;
-        console.log(product_id);
         await connection.query('INSERT INTO cart_item (cart_id, product_id, quantity) VALUES (?, ?, ?)',
           [newCart.insertId, product_id, quantity]);
       }
@@ -412,7 +417,6 @@ const getUserCart = async (req, res) => {
   const connection = await getConnection();
   const { user_id } = req.user;
  
-  console.log(user_id);
   try {
     const [userCartData] = await connection.query(`
       SELECT ci.*, p.*
@@ -447,8 +451,6 @@ const emptyCart = async (req, res) => {
   const { id } = req.params; 
 
   const cart_item_id  = id;
-  console.log(user_id , cart_item_id );
-
   try {
     await connection.beginTransaction();
 
@@ -457,8 +459,6 @@ const emptyCart = async (req, res) => {
 
     if (userData.length > 0) {
       const [cartData] = await connection.query('SELECT * FROM cart WHERE user_id = ?', [user_id]);
-
-      console.log(cartData[0].cart_id);
 
       if (cartData.length > 0) {
         await connection.query('DELETE FROM cart_item WHERE cart_id = ? AND cart_item_id = ?', [cartData[0].cart_id, cart_item_id]);
@@ -530,7 +530,6 @@ const createOrder = async (req, res) => {
 
       let lineItems = [];
       for (const item of userCartData) {
-        console.log(finalAmount)
         lineItems.push({
           price_data: {
             currency: "usd",
@@ -548,14 +547,14 @@ const createOrder = async (req, res) => {
       payment_method_types: ["card"],
         line_items: lineItems,
         mode: "payment",
-        success_url: `http://localhost:3000/billing?id=${orderId}`,
-        cancel_url: `http://localhost:3000/fail/${orderId}`,
+        success_url: `https://thedeadstock.shop/billing?id=${orderId}`,
+        cancel_url: `https://thedeadstock.shop/fail/${orderId}`,
       });
 
       const orderData = {
         session_id: session.id,
         shipping_status: 'Pending',
-        fullfill_status: session.status,
+        fullfill_status: 'Complete',
         total_price: finalAmount,
         order_id: orderId,
         user_id: user_id
@@ -584,8 +583,6 @@ const createOrder = async (req, res) => {
       // Insert shipping address
       const shippingAddressId = await insertShippingAddress(user_id, order_id, shippingAddressData);
       const billingAddressId = await insertBillingAddress(user_id, order_id, billingAddressData);
-
-      console.log(shippingAddressId , billingAddressId)
 
       await connection.query("UPDATE orders SET shipping_address_id = ? , billing_address_id = ? WHERE order_id = ?", [shippingAddressId, billingAddressId, order_id]);
       await connection.query(`DELETE cart_item.* FROM cart INNER JOIN cart_item ON cart.cart_id = cart_item.cart_id WHERE cart.user_id = ?`, [user_id]);
@@ -660,14 +657,10 @@ const getOrderById = async (req, res) => {
 
 const updateOrderStatus = async (req, res) => {
   const connection = await getConnection();
-  const { status , order_id } = req.body;
-
-  console.log(status," ",order_id)
+  const { order_id , status  } = req.body;
 
   try {
     await connection.beginTransaction();
-
-
     const [result] = await connection.query(
       'UPDATE orders SET shipping_status = ? WHERE order_id = ?',
       [status, order_id]
@@ -748,7 +741,6 @@ const createInvoice = async(req, res) => {
       await connection.commit();
 
       res.status.json({message:'Invoice created successfully'});
-      console.log('Invoice created successfully');
 
   } catch (error) {
       // Rollback transaction in case of error

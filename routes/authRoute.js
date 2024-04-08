@@ -46,7 +46,7 @@ router.get('/check-login', authAccess  , getCheckLogin);
 router.put('/save-address', authAccess ,saveAddress);
 router.get('/get-address', authAccess, getAddress);
 
-router.post('/create-order', authAccess, isAdmin ,createOrder);
+router.post('/create-order', authAccess ,createOrder);
 router.get('/get-order/:id', authAccess, getOrderById);
 router.put('/order/update-order' , authAccess , isAdmin ,updateOrderStatus);
 
@@ -61,7 +61,7 @@ router.get('/get-dashboard', authAccess , isAdmin ,getDashboardAdmin);
 /*----------------------- Google OAuth ----------------------*/
 router.get('/google', passport.authenticate('google', { scope: ['email', 'profile'] }));
 
-router.get('/google/callback', passport.authenticate('google', { failureRedirect: 'http://localhost:3000/login' }), async (req, res) => {
+router.get('/google/callback', passport.authenticate('google', { failureRedirect: 'https://thedeadstock.shop/login' }), async (req, res) => {
     const profile = req.user; 
     const access_token = generateAccessToken(profile.user_id, profile.user_type);
     const refresh_token = generateRefreshToken(profile.user_id, profile.user_type); 
@@ -72,10 +72,10 @@ router.get('/google/callback', passport.authenticate('google', { failureRedirect
     console.log('profile.user_type' , profile.user_type)
 
     if(profile.user_type === 'user_admin' || profile.user_type === 'super_admin'){
-        return res.redirect(`http://localhost:3000/dashboard?access_token=${access_token}&refresh_token=${refresh_token}`);
+        return res.redirect(`https://thedeadstock.shop/dashboard?access_token=${access_token}&refresh_token=${refresh_token}`);
     }
     else {
-        return res.redirect(`http://localhost:3000?access_token=${access_token}&refresh_token=${refresh_token}`);
+        return res.redirect(`https://thedeadstock.shop?access_token=${access_token}&refresh_token=${refresh_token}`);
     }
     
 });

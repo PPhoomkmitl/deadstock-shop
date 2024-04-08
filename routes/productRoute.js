@@ -17,9 +17,8 @@ router.get('/get-id/:id', getProduct);
 router.get('/get-all', getAllProduct);
 
 // router.get('/get-search', getSearchProduct);
-
 // router.post('/create', authAccess ,createProduct);
-router.post('/create', authAccess , isAdmin ,createProduct); // Temporary Use
+router.post('/create', authAccess , isAdmin ,createProduct);
 
 router.put('/update/:id', authAccess ,updateProduct);
 router.put('/update-stock/:id', authAccess , updateStockProduct);

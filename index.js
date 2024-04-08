@@ -3,11 +3,11 @@ require('dotenv').config();
 const bodyParser = require('body-parser');
 
 const cors = require('cors');
-const corsOptions = {
-  origin: 'http://localhost:3000', 
-  optionsSuccessStatus: 200,
-  credentials: true 
-};
+// const corsOptions = {
+//   origin: ['http://139.5.145.64:3000', 'https://thedeadstock.shop'], 
+//   optionsSuccessStatus: 200,
+//   credentials: true 
+// };
 
 const authRouter = require("./routes/authRoute");
 const productRouter = require("./routes/productRoute");
@@ -16,7 +16,7 @@ const productCategoryRouter = require("./routes/productCategoryRoute");
 const getConnection = require('./config/dbConnect');
 
 
-const PORT = process.env.PORT || 5000;
+const PORT = process.env.API_PORT ;
 
 const app = express();
 
@@ -36,7 +36,7 @@ app.use(passport.session());
 
 
 // Parse webhook payload as raw body
-app.post("/webhook", bodyParser.raw({ type: "application/json" }), async (req, res) => {
+app.post("/api/webhook", bodyParser.raw({ type: "application/json" }), async (req, res) => {
   const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY);
   const endpointSecret = process.env.STRIPE_SECRET_ENDPOINT_KEY;
 
@@ -59,20 +59,16 @@ app.post("/webhook", bodyParser.raw({ type: "application/json" }), async (req, r
       const paymentSuccessData = event.data.object;
       const sessionId = paymentSuccessData.id;
 
-      console.log('payment in!');
       const data = {
         fullfill_status: paymentSuccessData.status,
       };
-
-      console.log(data.status);
 
       try {
         const [result] = await connection.query("UPDATE orders SET ? WHERE session_id = ?", [
           data,
           sessionId,
         ]);
-        console.log("=== update result", result);
-       
+  
       } catch (error) {
         console.error("Error updating order status:", error);
         res.status(500).send(`Error updating order status: ${error.message}`);
@@ -81,7 +77,6 @@ app.post("/webhook", bodyParser.raw({ type: "application/json" }), async (req, r
 
       break;
     default:
-      console.log(`Unhandled event type ${event.type}`);
   }
 
   res.send();
@@ -89,18 +84,18 @@ app.post("/webhook", bodyParser.raw({ type: "application/json" }), async (req, r
 
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
-app.use(cors(corsOptions));
+app.use(cors());
 
 
 // Route for user authentication
-app.use("/user", authRouter);
-app.use("/product", productRouter);
-app.use("/category", productCategoryRouter);
+app.use("/api/user", authRouter);
+app.use("/api/product", productRouter);
+app.use("/api/category", productCategoryRouter);
 
 
 // Start the server
 const server = app.listen(PORT, () => {
-  console.log(`App listening at http://localhost:${PORT}`);
+  console.log(`App listening at :${PORT}`);
 });
 
 // Handle server errors
